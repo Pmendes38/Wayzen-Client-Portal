@@ -6,6 +6,20 @@ const LOCK_ERROR_PATTERN = /lock broken by another request|acquiring lock/i;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timer: number | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
+}
+
 function isTransientLockError(message?: string) {
   return !!message && LOCK_ERROR_PATTERN.test(message.toLowerCase());
 }
@@ -122,7 +136,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let authError: Error | null = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
-      const result = await supabase.auth.signInWithPassword({ email, password });
+      const result = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        12000,
+        'Tempo de autenticacao excedido. Verifique a conexao e tente novamente.'
+      );
 
       if (!result.error) {
         authData = result.data;

@@ -15,7 +15,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
+    // Mantem o fluxo simples para login por senha no portal.
+    detectSessionInUrl: false,
   },
 });
 
