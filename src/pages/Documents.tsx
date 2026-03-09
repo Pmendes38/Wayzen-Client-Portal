@@ -28,7 +28,7 @@ export default function Documents() {
 
   const uploadDoc = async () => {
     if (!form.title || !form.fileUrl) return;
-    await portalService.createDocument({ clientId, ...form });
+    await portalService.createDocument({ clientId, ...form, fileSize: 0, mimeType: 'application/octet-stream' });
     setShowUpload(false);
     setForm({ title: '', description: '', fileUrl: '', fileName: '', category: '' });
     loadDocs();
@@ -152,3 +152,4 @@ export default function Documents() {
     </div>
   );
 }
+
