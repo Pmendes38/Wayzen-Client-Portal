@@ -105,12 +105,9 @@ export default function Login() {
             </form>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-xs text-gray-500 text-center">Credenciais de demonstracao:</p>
-              <div className="mt-2 space-y-1 text-xs text-gray-500">
-                <p><strong>Admin:</strong> admin@wayzen.com.br / admin123</p>
-                <p><strong>Consultor:</strong> consultor@wayzen.com.br / consultor123</p>
-                <p><strong>Cliente:</strong> maria@escolaabc.com.br / cliente123</p>
-              </div>
+              <p className="text-xs text-gray-500 text-center">
+                A autenticação é feita exclusivamente pelo Supabase Auth.
+              </p>
             </div>
           </div>
         </div>

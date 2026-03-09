@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 interface User {
   id: number;
@@ -23,27 +25,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data?.user) setUser(data.user); })
-      .catch(() => {})
+    const loadProfileFromSession = async (session: Session | null) => {
+      if (!session?.user?.email) {
+        setUser(null);
+        return;
+      }
+
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('id, email, name, role, client_id')
+        .eq('email', session.user.email)
+        .eq('is_active', true)
+        .single();
+
+      if (error || !profile) {
+        await supabase.auth.signOut();
+        setUser(null);
+        return;
+      }
+
+      setUser({
+        id: profile.id,
+        email: profile.email,
+        name: profile.name,
+        role: profile.role,
+        clientId: profile.client_id,
+      });
+    };
+
+    supabase.auth
+      .getSession()
+      .then(({ data }) => loadProfileFromSession(data.session))
       .finally(() => setLoading(false));
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (_event: AuthChangeEvent, session: Session | null) => {
+        await loadProfileFromSession(session);
+      }
+    );
+
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ email, password }),
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
-    if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
-    const data = await res.json();
-    setUser(data.user);
+
+    if (authError) {
+      throw new Error(authError.message || 'Falha na autenticação');
+    }
+
+    const loggedEmail = authData.user?.email;
+    if (!loggedEmail) {
+      throw new Error('Usuário autenticado sem email válido');
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('id, email, name, role, client_id')
+      .eq('email', loggedEmail)
+      .eq('is_active', true)
+      .single();
+
+    if (profileError || !profile) {
+      await supabase.auth.signOut();
+      throw new Error('Usuário não autorizado no portal');
+    }
+
+    setUser({
+      id: profile.id,
+      email: profile.email,
+      name: profile.name,
+      role: profile.role,
+      clientId: profile.client_id,
+    });
   };
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    await supabase.auth.signOut();
     setUser(null);
   };
 
