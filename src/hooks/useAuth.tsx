@@ -181,19 +181,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     let authData: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['data'] | null = null;
-    let authError: Error | null = null;
 
-    for (let attempt = 0; attempt < 3; attempt++) {
-      let result: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
-      try {
-        result = await withTimeout(
-          supabase.auth.signInWithPassword({ email, password }),
-          20000,
-          'Tempo de autenticacao excedido. Verifique a conexao e tente novamente.'
-        );
-      } catch (error: any) {
-        // Fallback de browser: evita travas intermitentes de lock no client JS.
-        if (isAuthTimeoutError(error?.message)) {
+    try {
+      const result = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        10000,
+        'Tempo de autenticacao excedido. Verifique a conexao e tente novamente.'
+      );
+
+      if (result.error) {
+        if (isTransientLockError(result.error.message)) {
+          await sleep(300);
           await loginViaRest(email, password);
           const [{ data: userData }, { data: sessionData }] = await Promise.all([
             supabase.auth.getUser(),
@@ -203,34 +201,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user: userData.user,
             session: sessionData.session,
           } as any;
-          authError = null;
-          break;
+        } else {
+          throw new Error(result.error.message || 'Falha na autenticação');
         }
+      } else {
+        authData = result.data;
+      }
+    } catch (error: any) {
+      if (isAuthTimeoutError(error?.message) || isTransientLockError(error?.message)) {
+        await loginViaRest(email, password);
+        const [{ data: userData }, { data: sessionData }] = await Promise.all([
+          supabase.auth.getUser(),
+          supabase.auth.getSession(),
+        ]);
+        authData = {
+          user: userData.user,
+          session: sessionData.session,
+        } as any;
+      } else {
         throw error;
       }
-
-      if (!result.error) {
-        authData = result.data;
-        authError = null;
-        break;
-      }
-
-      authError = result.error;
-      if (!isTransientLockError(result.error.message) || attempt === 2) {
-        break;
-      }
-
-      await sleep(250 * (attempt + 1));
-    }
-
-    if (authError) {
-      if (isAuthTimeoutError(authError.message)) {
-        throw new Error('Tempo de autenticacao excedido. Verifique se o Vercel esta com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY corretos e tente novamente.');
-      }
-      if (isTransientLockError(authError.message)) {
-        throw new Error('Conflito temporario de sessao entre abas. Tente novamente em 2 segundos.');
-      }
-      throw new Error(authError.message || 'Falha na autenticação');
     }
 
     if (!authData) {
@@ -242,7 +232,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Usuário autenticado sem email válido');
     }
 
-    const currentSession = await supabase.auth.getSession();
+    const currentSession = await withTimeout(
+      supabase.auth.getSession(),
+      8000,
+      'Tempo de autenticacao excedido ao recuperar sessao.'
+    );
     const session = currentSession.data.session;
     if (!session) {
       throw new Error('Nao foi possivel recuperar a sessao apos login.');

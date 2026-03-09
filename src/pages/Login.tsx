@@ -12,26 +12,12 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
-    let timer: number | undefined;
-    try {
-      return await Promise.race([
-        promise,
-        new Promise<never>((_, reject) => {
-          timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
-        }),
-      ]);
-    } finally {
-      if (timer) window.clearTimeout(timer);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await withTimeout(login(email, password), 25000, 'Login demorou mais do que o esperado. Tente novamente.');
+      await login(email, password);
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
