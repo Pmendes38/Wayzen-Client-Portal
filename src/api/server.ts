@@ -3,7 +3,6 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { initDb, getDb } from './database.js';
 import { supabase } from './supabase.js';
 
 const app = express();
@@ -13,9 +12,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'wayzen-client-portal-secret-key-20
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
-
-// Initialize database (SQLite - não mais necessário, mantido para rollback)
-// initDb();
 
 // ─── Auth Middleware ─────────────────────────────────────────────────
 function hashPassword(password: string): string {
@@ -223,7 +219,7 @@ app.get('/api/updates/:clientId', authenticateToken, async (req: any, res) => {
     
     if (error) throw error;
     
-    const formattedUpdates = updates.map(u => ({
+    const formattedUpdates = updates.map((u: any) => ({
       ...u,
       author_name: u.author?.name
     }));
@@ -321,7 +317,7 @@ app.get('/api/tickets', authenticateToken, async (req: any, res) => {
     const { data: tickets, error } = await query;
     if (error) throw error;
     
-    const formattedTickets = tickets.map(t => ({
+    const formattedTickets = tickets.map((t: any) => ({
       ...t,
       creator_name: t.creator?.name,
       company_name: t.client?.company_name
@@ -436,7 +432,7 @@ app.get('/api/ticket-messages/:ticketId', authenticateToken, async (req, res) =>
     
     if (messagesError) throw messagesError;
     
-    const formattedMessages = messages.map(m => ({
+    const formattedMessages = messages.map((m: any) => ({
       ...m,
       author_name: m.author?.name,
       author_role: m.author?.role
@@ -498,7 +494,7 @@ app.get('/api/documents/:clientId', authenticateToken, async (req: any, res) => 
     
     if (error) throw error;
     
-    const formattedDocs = docs.map(d => ({
+    const formattedDocs = docs.map((d: any) => ({
       ...d,
       uploader_name: d.uploader?.name
     }));
@@ -569,7 +565,7 @@ app.get('/api/reports/:clientId', authenticateToken, async (req: any, res) => {
     
     if (error) throw error;
     
-    const formattedReports = reports.map(r => ({
+    const formattedReports = reports.map((r: any) => ({
       ...r,
       author_name: r.author?.name
     }));
@@ -690,7 +686,7 @@ app.get('/api/portal/dashboard/:clientId', authenticateToken, async (req: any, r
       .select('is_completed, sprints!inner(client_id)')
       .eq('sprints.client_id', clientId);
     
-    const completed = allTasks?.filter(t => t.is_completed).length || 0;
+    const completed = allTasks?.filter((t: any) => t.is_completed).length || 0;
     const total = allTasks?.length || 0;
 
     const formattedUpdates = updatesResult.data?.map((u: any) => ({

@@ -1,0 +1,58 @@
+# ============================================
+# 🐳 DOCKER COMPOSE - WAYZEN CLIENT PORTAL
+# ============================================
+# Para desenvolvimento e testes locais
+# 
+# Uso:
+#   docker-compose up -d
+#   docker-compose logs -f
+#   docker-compose down
+# ============================================
+
+version: '3.8'
+
+services:
+  # Backend + Frontend
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wayzen-portal
+    ports:
+      - "3001:3001"
+      - "5173:5173"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - wayzen-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  wayzen-network:
+    driver: bridge
+
+# ============================================
+# 📝 COMANDOS ÚTEIS
+# ============================================
+# 
+# Iniciar:          docker-compose up -d
+# Ver logs:         docker-compose logs -f app
+# Parar:            docker-compose stop
+# Remover:          docker-compose down
+# Rebuild:          docker-compose up -d --build
+# Executar comando: docker-compose exec app sh
+# 
+# ============================================

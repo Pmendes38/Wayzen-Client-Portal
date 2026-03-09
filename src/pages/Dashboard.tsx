@@ -143,7 +143,7 @@ export default function Dashboard() {
                   <span className="badge badge-blue">Em progresso</span>
                 </div>
                 <p className="text-xs text-gray-500">
-                  {sprint.start_date && `${new Date(sprint.start_date).toLocaleDateString('pt-BR')} - ${new Date(sprint.end_date).toLocaleDateString('pt-BR')}`}
+                  {sprint.start_date && sprint.end_date && `${new Date(sprint.start_date).toLocaleDateString('pt-BR')} - ${new Date(sprint.end_date).toLocaleDateString('pt-BR')}`}
                 </p>
               </div>
             )) : (

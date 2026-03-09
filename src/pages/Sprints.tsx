@@ -81,7 +81,7 @@ export default function Sprints() {
                     <div className="flex items-center gap-3 mt-1">
                       <span className="flex items-center gap-1 text-xs text-gray-500">
                         <Calendar size={12} />
-                        {sprint.start_date ? `${new Date(sprint.start_date).toLocaleDateString('pt-BR')} - ${new Date(sprint.end_date).toLocaleDateString('pt-BR')}` : 'Sem datas'}
+                        {sprint.start_date && sprint.end_date ? `${new Date(sprint.start_date).toLocaleDateString('pt-BR')} - ${new Date(sprint.end_date).toLocaleDateString('pt-BR')}` : 'Sem datas'}
                       </span>
                     </div>
                   </div>

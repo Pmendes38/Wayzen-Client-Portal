@@ -105,7 +105,7 @@ export default function Tickets() {
                     <p className="text-sm text-gray-500 mt-1">{selectedTicket.description}</p>
                   </div>
                   {user?.role !== 'client' && (
-                    <select value={selectedTicket.status} onChange={e => updateTicketStatus(selectedTicket.id, e.target.value)} className="input-field w-auto text-sm">
+                    <select value={selectedTicket.status} onChange={e => updateTicketStatus(selectedTicket.id, e.target.value as any)} className="input-field w-auto text-sm">
                       <option value="open">Aberto</option>
                       <option value="in_progress">Em Progresso</option>
                       <option value="resolved">Resolvido</option>
