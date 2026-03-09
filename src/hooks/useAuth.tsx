@@ -56,6 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let disposed = false;
+
     const loadProfileFromSession = async (session: Session | null) => {
       if (!session?.user?.email) {
         setUser(null);
@@ -79,10 +81,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     };
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => loadProfileFromSession(data.session))
-      .finally(() => setLoading(false));
+    // Fail-safe para evitar spinner infinito em cenarios de lock/concorrencia do Auth.
+    const loadingTimeout = window.setTimeout(() => {
+      if (!disposed) {
+        setLoading(false);
+      }
+    }, 6000);
+
+    const bootstrapSession = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        await loadProfileFromSession(data.session);
+      } catch {
+        setUser(null);
+      } finally {
+        if (!disposed) {
+          setLoading(false);
+        }
+        window.clearTimeout(loadingTimeout);
+      }
+    };
+
+    bootstrapSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (_event: AuthChangeEvent, session: Session | null) => {
@@ -90,7 +110,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => authListener.subscription.unsubscribe();
+    return () => {
+      disposed = true;
+      window.clearTimeout(loadingTimeout);
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
