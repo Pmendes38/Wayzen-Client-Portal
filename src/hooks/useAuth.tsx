@@ -167,8 +167,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     bootstrapSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event: AuthChangeEvent, session: Session | null) => {
-        await loadProfileFromSession(session);
+      (_event: AuthChangeEvent, session: Session | null) => {
+        // Evita deadlocks de lock interno do Supabase Auth ao executar queries no callback.
+        window.setTimeout(() => {
+          loadProfileFromSession(session).catch(() => {
+            setUser(null);
+          });
+        }, 0);
       }
     );
 
