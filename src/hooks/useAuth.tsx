@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAnonKey, supabaseUrl } from '@/lib/supabase';
 
 const LOCK_ERROR_PATTERN = /lock broken by another request|acquiring lock/i;
 
@@ -22,6 +22,50 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMes
 
 function isAuthTimeoutError(message?: string) {
   return !!message && /tempo de autenticacao excedido|authentication timeout|timed out/i.test(message);
+}
+
+async function loginViaRest(email: string, password: string) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+      signal: controller.signal,
+    });
+
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload?.error_description || payload?.msg || 'Falha na autenticação');
+    }
+
+    const accessToken = payload?.access_token as string | undefined;
+    const refreshToken = payload?.refresh_token as string | undefined;
+    if (!accessToken || !refreshToken) {
+      throw new Error('Resposta de autenticação inválida do Supabase.');
+    }
+
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    if (error) {
+      throw error;
+    }
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Tempo de autenticacao excedido. Verifique sua conexao e tente novamente.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function isTransientLockError(message?: string) {
@@ -140,11 +184,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let authError: Error | null = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
-      const result = await withTimeout(
-        supabase.auth.signInWithPassword({ email, password }),
-        20000,
-        'Tempo de autenticacao excedido. Verifique a conexao e tente novamente.'
-      );
+      let result: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
+      try {
+        result = await withTimeout(
+          supabase.auth.signInWithPassword({ email, password }),
+          20000,
+          'Tempo de autenticacao excedido. Verifique a conexao e tente novamente.'
+        );
+      } catch (error: any) {
+        // Fallback de browser: evita travas intermitentes de lock no client JS.
+        if (isAuthTimeoutError(error?.message)) {
+          await loginViaRest(email, password);
+          const [{ data: userData }, { data: sessionData }] = await Promise.all([
+            supabase.auth.getUser(),
+            supabase.auth.getSession(),
+          ]);
+          authData = {
+            user: userData.user,
+            session: sessionData.session,
+          } as any;
+          authError = null;
+          break;
+        }
+        throw error;
+      }
 
       if (!result.error) {
         authData = result.data;
