@@ -2,6 +2,37 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 
+const LOCK_ERROR_PATTERN = /lock broken by another request|acquiring lock/i;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isTransientLockError(message?: string) {
+  return !!message && LOCK_ERROR_PATTERN.test(message.toLowerCase());
+}
+
+async function resolveProfileBySession(session: Session) {
+  const authId = session.user.id;
+  const email = session.user.email;
+
+  let profileQuery = await supabase
+    .from('users')
+    .select('id, email, name, role, client_id')
+    .eq('auth_user_id', authId)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!profileQuery.data && email) {
+    profileQuery = await supabase
+      .from('users')
+      .select('id, email, name, role, client_id')
+      .eq('email', email)
+      .eq('is_active', true)
+      .single();
+  }
+
+  return profileQuery;
+}
+
 interface User {
   id: number;
   email: string;
@@ -31,12 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { data: profile, error } = await supabase
-        .from('users')
-        .select('id, email, name, role, client_id')
-        .eq('email', session.user.email)
-        .eq('is_active', true)
-        .single();
+      const { data: profile, error } = await resolveProfileBySession(session);
 
       if (error || !profile) {
         await supabase.auth.signOut();
@@ -68,13 +94,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    let authData: Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>['data'] | null = null;
+    let authError: Error | null = null;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const result = await supabase.auth.signInWithPassword({ email, password });
+
+      if (!result.error) {
+        authData = result.data;
+        authError = null;
+        break;
+      }
+
+      authError = result.error;
+      if (!isTransientLockError(result.error.message) || attempt === 2) {
+        break;
+      }
+
+      await sleep(250 * (attempt + 1));
+    }
 
     if (authError) {
+      if (isTransientLockError(authError.message)) {
+        throw new Error('Conflito temporario de sessao entre abas. Tente novamente em 2 segundos.');
+      }
       throw new Error(authError.message || 'Falha na autenticação');
+    }
+
+    if (!authData) {
+      throw new Error('Falha na autenticação');
     }
 
     const loggedEmail = authData.user?.email;
@@ -82,12 +130,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Usuário autenticado sem email válido');
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('users')
-      .select('id, email, name, role, client_id')
-      .eq('email', loggedEmail)
-      .eq('is_active', true)
-      .single();
+    const currentSession = await supabase.auth.getSession();
+    const session = currentSession.data.session;
+    if (!session) {
+      throw new Error('Nao foi possivel recuperar a sessao apos login.');
+    }
+
+    const { data: profile, error: profileError } = await resolveProfileBySession(session);
 
     if (profileError || !profile) {
       await supabase.auth.signOut();
