@@ -17,8 +17,7 @@
     "start:prod": "NODE_ENV=production node dist/server.js",
     "type-check": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "db:validate": "node scripts/validate-supabase.js",
-    "test:api": "node scripts/test-migrated-api.js",
-    "postinstall": "npm run type-check"
+    "test:api": "node scripts/test-migrated-api.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0",
