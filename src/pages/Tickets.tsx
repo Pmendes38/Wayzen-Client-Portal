@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
 import { TicketItem, TicketMessage, TicketPriority, TicketStatus } from '@/types/domain';
@@ -7,6 +8,7 @@ import { Plus, MessageSquare, Clock, CheckCircle2, AlertCircle, X } from 'lucide
 
 export default function Tickets() {
   const { user } = useAuth();
+  const { activeClientId } = usePortalScope();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<TicketItem | null>(null);
   const [messages, setMessages] = useState<TicketMessage[]>([]);
@@ -17,11 +19,11 @@ export default function Tickets() {
 
   useEffect(() => {
     loadTickets();
-  }, []);
+  }, [activeClientId]);
 
   const loadTickets = async () => {
     try {
-      const data = await portalService.getTickets();
+      const data = await portalService.getTickets(activeClientId || undefined);
       setTickets(data);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
@@ -35,7 +37,7 @@ export default function Tickets() {
 
   const createTicket = async () => {
     if (!form.title) return;
-    await portalService.createTicket({ ...form, clientId: user?.clientId || 1 });
+    await portalService.createTicket({ ...form, clientId: user?.role === 'client' ? (user.clientId || 1) : (activeClientId || undefined) });
     setShowNewTicket(false);
     setForm({ title: '', description: '', priority: 'medium', category: '' });
     loadTickets();

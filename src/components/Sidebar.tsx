@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Ticket, FileText, FolderOpen,
-  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight
+  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, Building2, CalendarDays, ClipboardPen
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -16,14 +16,29 @@ export default function Sidebar() {
     navigate('/login');
   };
 
-  const navItems = [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/sprints', icon: BarChart3, label: 'Sprints' },
-    { to: '/tickets', icon: Ticket, label: 'Suporte' },
-    { to: '/documents', icon: FolderOpen, label: 'Documentos' },
-    { to: '/reports', icon: FileText, label: 'Relatórios' },
-    { to: '/notifications', icon: Bell, label: 'Notificações' },
-  ];
+  const isInternal = user?.role === 'admin' || user?.role === 'consultant';
+
+  const navItems = isInternal
+    ? [
+        { to: '/', icon: LayoutDashboard, label: 'Dashboard Operacional' },
+        { to: '/portals', icon: Building2, label: 'Portais de Clientes' },
+        { to: '/sprints', icon: BarChart3, label: 'Editor de Sprints' },
+        { to: '/daily-logs', icon: ClipboardPen, label: 'Registro Diário' },
+        { to: '/meetings', icon: CalendarDays, label: 'Agenda e Chamadas' },
+        { to: '/tickets', icon: Ticket, label: 'Suporte' },
+        { to: '/documents', icon: FolderOpen, label: 'Documentos' },
+        { to: '/reports', icon: FileText, label: 'Relatórios' },
+        { to: '/notifications', icon: Bell, label: 'Notificações' },
+      ]
+    : [
+        { to: '/', icon: LayoutDashboard, label: 'Meu Projeto' },
+        { to: '/sprints', icon: BarChart3, label: 'Cronograma' },
+        { to: '/meetings', icon: CalendarDays, label: 'Agenda' },
+        { to: '/tickets', icon: Ticket, label: 'Suporte' },
+        { to: '/documents', icon: FolderOpen, label: 'Documentos' },
+        { to: '/reports', icon: FileText, label: 'Relatórios' },
+        { to: '/notifications', icon: Bell, label: 'Notificações' },
+      ];
 
   return (
     <aside className={`${collapsed ? 'w-16' : 'w-72'} bg-white/95 border-r border-gray-200 flex flex-col transition-all duration-300 min-h-screen backdrop-blur`}>

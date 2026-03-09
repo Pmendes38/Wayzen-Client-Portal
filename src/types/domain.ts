@@ -28,7 +28,21 @@ export interface SprintTask {
   id: number;
   sprint_id: number;
   title: string;
-  is_completed: 0 | 1;
+  description?: string | null;
+  is_completed: boolean;
+  task_order?: number;
+}
+
+export interface SprintBacklogItem {
+  id: number;
+  client_id: number;
+  sprint_id: number | null;
+  title: string;
+  details?: string | null;
+  occurred_on?: string | null;
+  due_date?: string | null;
+  status: 'planned' | 'in_progress' | 'done';
+  created_at: string;
 }
 
 export interface DashboardData {
@@ -79,12 +93,37 @@ export interface SharedDocument {
 export interface SharedReport {
   id: number;
   title: string;
-  type: 'weekly' | 'monthly';
+  type: 'weekly' | 'monthly' | 'quarterly' | 'custom';
   period_start: string;
   period_end: string;
   content?: string | null;
-  metrics?: string | null;
+  metrics?: string | null | Record<string, unknown>;
   author_name?: string;
+  created_at: string;
+}
+
+export interface DailyLog {
+  id: number;
+  client_id: number;
+  consultant_user_id: number;
+  log_date: string;
+  progress_score: number;
+  hours_worked: number;
+  summary: string;
+  blockers?: string | null;
+  next_steps?: string | null;
+  created_at: string;
+}
+
+export interface MeetingEvent {
+  id: number;
+  client_id: number;
+  title: string;
+  meeting_date: string;
+  meeting_type: 'meeting' | 'call';
+  transcript?: string | null;
+  notes?: string | null;
+  created_by_user_id: number;
   created_at: string;
 }
 

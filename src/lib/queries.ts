@@ -5,11 +5,24 @@ export async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: userData, error } = await supabase
+  const uid = user.id;
+  let baseQuery = supabase
     .from('users')
     .select('id, email, name, role, client_id, phone, avatar_url, created_at')
-    .eq('email', user.email)
-    .single();
+    .eq('auth_user_id', uid)
+    .maybeSingle();
+
+  let { data: userData, error } = await baseQuery;
+
+  if (!userData && user.email) {
+    const fallback = await supabase
+      .from('users')
+      .select('id, email, name, role, client_id, phone, avatar_url, created_at')
+      .eq('email', user.email)
+      .single();
+    userData = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
   return userData;
@@ -139,8 +152,133 @@ export async function getSprintTasks(sprintId: number) {
   return data;
 }
 
+export async function createSprint(sprintData: {
+  clientId: number;
+  name: string;
+  weekNumber: number;
+  startDate?: string;
+  endDate?: string;
+  notes?: string;
+}) {
+  const { data, error } = await supabase
+    .from('sprints')
+    .insert({
+      client_id: sprintData.clientId,
+      name: sprintData.name,
+      week_number: sprintData.weekNumber,
+      status: 'planned',
+      start_date: sprintData.startDate,
+      end_date: sprintData.endDate,
+      notes: sprintData.notes,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSprint(sprintId: number, updates: {
+  status?: 'planned' | 'in_progress' | 'completed';
+  startDate?: string;
+  endDate?: string;
+  notes?: string;
+}) {
+  const payload: Record<string, unknown> = {};
+  if (updates.status) payload.status = updates.status;
+  if (updates.startDate !== undefined) payload.start_date = updates.startDate;
+  if (updates.endDate !== undefined) payload.end_date = updates.endDate;
+  if (updates.notes !== undefined) payload.notes = updates.notes;
+
+  const { error } = await supabase
+    .from('sprints')
+    .update(payload)
+    .eq('id', sprintId);
+
+  if (error) throw error;
+}
+
+export async function createSprintTask(taskData: {
+  sprintId: number;
+  title: string;
+  description?: string;
+  taskOrder?: number;
+}) {
+  const { data, error } = await supabase
+    .from('sprint_tasks')
+    .insert({
+      sprint_id: taskData.sprintId,
+      title: taskData.title,
+      description: taskData.description,
+      week_number: 0,
+      task_order: taskData.taskOrder || 0,
+      is_completed: false,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSprintTask(taskId: number, updates: { isCompleted?: boolean }) {
+  const payload: Record<string, unknown> = {};
+  if (updates.isCompleted !== undefined) {
+    payload.is_completed = updates.isCompleted;
+    payload.completed_at = updates.isCompleted ? new Date().toISOString() : null;
+  }
+
+  const { error } = await supabase
+    .from('sprint_tasks')
+    .update(payload)
+    .eq('id', taskId);
+
+  if (error) throw error;
+}
+
+export async function getSprintBacklog(clientId: number) {
+  const { data, error } = await supabase
+    .from('sprint_backlog')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createSprintBacklogItem(itemData: {
+  clientId: number;
+  sprintId?: number | null;
+  title: string;
+  details?: string;
+  occurredOn?: string;
+  dueDate?: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const { data, error } = await supabase
+    .from('sprint_backlog')
+    .insert({
+      client_id: itemData.clientId,
+      sprint_id: itemData.sprintId ?? null,
+      title: itemData.title,
+      details: itemData.details,
+      occurred_on: itemData.occurredOn,
+      due_date: itemData.dueDate,
+      status: 'planned',
+      created_by_user_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 // ─── Tickets ─────────────────────────────────────────────────────────
-export async function getTickets() {
+export async function getTickets(clientId?: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error('Usuário não autenticado');
 
@@ -156,6 +294,8 @@ export async function getTickets() {
   // Se for cliente, filtrar por client_id
   if (user.role === 'client' && user.client_id) {
     query = query.eq('client_id', user.client_id);
+  } else if (clientId) {
+    query = query.eq('client_id', clientId);
   }
 
   const { data, error } = await query;
@@ -386,6 +526,89 @@ export async function createReport(reportData: {
       period_end: reportData.periodEnd,
       content: reportData.content,
       metrics: reportData.metrics,
+      created_by_user_id: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getDailyLogs(clientId: number) {
+  const { data, error } = await supabase
+    .from('daily_logs')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('log_date', { ascending: false })
+    .limit(30);
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createDailyLog(payload: {
+  clientId: number;
+  logDate: string;
+  progressScore: number;
+  hoursWorked: number;
+  summary: string;
+  blockers?: string;
+  nextSteps?: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const { data, error } = await supabase
+    .from('daily_logs')
+    .insert({
+      client_id: payload.clientId,
+      consultant_user_id: user.id,
+      log_date: payload.logDate,
+      progress_score: payload.progressScore,
+      hours_worked: payload.hoursWorked,
+      summary: payload.summary,
+      blockers: payload.blockers,
+      next_steps: payload.nextSteps,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getMeetingEvents(clientId: number) {
+  const { data, error } = await supabase
+    .from('meeting_events')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('meeting_date', { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createMeetingEvent(payload: {
+  clientId: number;
+  title: string;
+  meetingDate: string;
+  meetingType: 'meeting' | 'call';
+  transcript?: string;
+  notes?: string;
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const { data, error } = await supabase
+    .from('meeting_events')
+    .insert({
+      client_id: payload.clientId,
+      title: payload.title,
+      meeting_date: payload.meetingDate,
+      meeting_type: payload.meetingType,
+      transcript: payload.transcript,
+      notes: payload.notes,
       created_by_user_id: user.id,
     })
     .select()

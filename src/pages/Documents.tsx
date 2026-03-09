@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
 import { SharedDocument } from '@/types/domain';
@@ -7,18 +8,21 @@ import { FileText, Download, Trash2, Plus, X, FolderOpen, File, Image, FileSprea
 
 export default function Documents() {
   const { user } = useAuth();
+  const { activeClientId, activeClient, loadingClients } = usePortalScope();
   const [documents, setDocuments] = useState<SharedDocument[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', fileUrl: '', fileName: '', category: '' });
   const [loading, setLoading] = useState(true);
 
-  const clientId = user?.clientId || 1;
+  const clientId = activeClientId;
 
   useEffect(() => {
-    loadDocs();
+    if (clientId) loadDocs();
+    else setLoading(false);
   }, [clientId]);
 
   const loadDocs = async () => {
+    if (!clientId) return;
     try {
       const data = await portalService.getDocuments(clientId);
       setDocuments(data);
@@ -27,7 +31,7 @@ export default function Documents() {
   };
 
   const uploadDoc = async () => {
-    if (!form.title || !form.fileUrl) return;
+    if (!clientId || !form.title || !form.fileUrl) return;
     await portalService.createDocument({ clientId, ...form, fileSize: 0, mimeType: 'application/octet-stream' });
     setShowUpload(false);
     setForm({ title: '', description: '', fileUrl: '', fileName: '', category: '' });
@@ -49,14 +53,22 @@ export default function Documents() {
 
   const categories = [...new Set(documents.map(d => d.category).filter(Boolean))] as string[];
 
-  if (loading) return <PageLoader />;
+  if (loading || loadingClients) return <PageLoader />;
+
+  if (!clientId) {
+    return <div className="card p-8 text-center text-gray-500">Selecione um portal para visualizar documentos.</div>;
+  }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Documentos</h1>
-          <p className="text-gray-500 mt-1">Documentos compartilhados do seu projeto</p>
+          <p className="text-gray-500 mt-1">
+            {user?.role === 'client'
+              ? 'Documentos compartilhados do seu projeto'
+              : `Documentos compartilhados do cliente ${activeClient?.company_name || ''}`}
+          </p>
         </div>
         {user?.role !== 'client' && (
           <button onClick={() => setShowUpload(true)} className="btn-primary flex items-center gap-2">

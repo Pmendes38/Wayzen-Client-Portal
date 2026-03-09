@@ -8,6 +8,9 @@ import Tickets from '@/pages/Tickets';
 import Documents from '@/pages/Documents';
 import Reports from '@/pages/Reports';
 import Notifications from '@/pages/Notifications';
+import ClientPortals from '@/pages/ClientPortals';
+import DailyLogs from '@/pages/DailyLogs';
+import Meetings from '@/pages/Meetings';
 import PageLoader from '@/components/PageLoader';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -32,6 +35,9 @@ function AppRoutes() {
         <Route path="/documents" element={<Documents />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/notifications" element={<Notifications />} />
+        <Route path="/portals" element={<ClientPortals />} />
+        <Route path="/daily-logs" element={<DailyLogs />} />
+        <Route path="/meetings" element={<Meetings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,25 +1,41 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePortalScope } from '@/hooks/usePortalScope';
 import { getDashboardData } from '@/lib/queries';
 import PageLoader from '@/components/PageLoader';
 import { DashboardData, ProjectUpdate, Sprint } from '@/types/domain';
-import { Ticket, FolderOpen, FileText, BarChart3, Clock, CheckCircle2, AlertTriangle, Milestone } from 'lucide-react';
+import { Ticket, FolderOpen, FileText, BarChart3, Clock, CheckCircle2, AlertTriangle, Milestone, ShieldCheck } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { isInternal, activeClient, activeClientId, loadingClients } = usePortalScope();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.clientId && user?.role === 'client') return;
-    const clientId = user?.clientId || 1;
-    getDashboardData(clientId)
+    if (loadingClients) return;
+    if (!activeClientId) {
+      setLoading(false);
+      return;
+    }
+
+    getDashboardData(activeClientId)
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [activeClientId, loadingClients, user]);
 
-  if (loading) return <PageLoader />;
+  const clientId = activeClientId;
+
+  if (loading || loadingClients) return <PageLoader />;
+
+  if (!clientId) {
+    return (
+      <div className="card p-8 text-center text-gray-500">
+        Nenhum cliente disponivel para este perfil.
+      </div>
+    );
+  }
 
   const progressPercent = data?.sprintProgress.total ? Math.round((data.sprintProgress.completed / data.sprintProgress.total) * 100) : 0;
 
@@ -46,16 +62,32 @@ export default function Dashboard() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Olá, {user?.name}!</h1>
         <p className="text-gray-500 mt-1">
-          {data?.client ? `Acompanhe o progresso do projeto de ${data.client.company_name}` : 'Bem-vindo ao Portal do Cliente Wayzen'}
+          {isInternal
+            ? `Visao administrativa do portal ${activeClient?.company_name || data?.client?.company_name || ''}`
+            : data?.client
+              ? `Acompanhe o progresso do projeto de ${data.client.company_name}`
+              : 'Bem-vindo ao Portal do Cliente Wayzen'}
         </p>
       </div>
+
+      {!isInternal && (
+        <div className="card p-4 mb-6 bg-green-50 border-green-100">
+          <div className="flex items-start gap-3">
+            <ShieldCheck size={20} className="text-green-600 mt-0.5" />
+            <div>
+              <p className="font-semibold text-green-900">Tudo sob controle</p>
+              <p className="text-sm text-green-800">Seu cronograma esta atualizado e o time interno registra as entregas diariamente para manter transparencia total.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="card p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Tickets Abertos</p>
+              <p className="text-sm text-gray-500">{isInternal ? 'Tickets em Atendimento' : 'Tickets Abertos'}</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{data?.openTickets || 0}</p>
             </div>
             <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -66,7 +98,7 @@ export default function Dashboard() {
         <div className="card p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Documentos</p>
+              <p className="text-sm text-gray-500">{isInternal ? 'Itens Documentados' : 'Documentos'}</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{data?.totalDocuments || 0}</p>
             </div>
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -77,7 +109,7 @@ export default function Dashboard() {
         <div className="card p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Relatórios</p>
+              <p className="text-sm text-gray-500">{isInternal ? 'Relatorios Emitidos' : 'Relatórios'}</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{data?.totalReports || 0}</p>
             </div>
             <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
@@ -88,7 +120,7 @@ export default function Dashboard() {
         <div className="card p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Progresso Sprint</p>
+              <p className="text-sm text-gray-500">{isInternal ? 'Execucao de Sprint' : 'Progresso Sprint'}</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{progressPercent}%</p>
             </div>
             <div className="w-10 h-10 bg-wayzen-100 rounded-lg flex items-center justify-center">
@@ -105,7 +137,7 @@ export default function Dashboard() {
         {/* Recent Updates */}
         <div className="card">
           <div className="p-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Atualizações Recentes</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{isInternal ? 'Diario de Projeto' : 'Atualizações Recentes'}</h2>
           </div>
           <div className="divide-y divide-gray-100">
             {data?.recentUpdates?.length ? data.recentUpdates.map((update: ProjectUpdate) => (
@@ -133,7 +165,7 @@ export default function Dashboard() {
         {/* Active Sprints */}
         <div className="card">
           <div className="p-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Sprints Ativos</h2>
+            <h2 className="text-lg font-semibold text-gray-900">{isInternal ? 'Sprints em Execucao' : 'Sprints Ativos'}</h2>
           </div>
           <div className="divide-y divide-gray-100">
             {data?.activeSprints?.length ? data.activeSprints.map((sprint: Sprint) => (

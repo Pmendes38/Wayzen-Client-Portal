@@ -1,30 +1,46 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
-import { Sprint, SprintTask } from '@/types/domain';
-import { CheckCircle2, Circle, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
+import { Sprint, SprintBacklogItem, SprintTask } from '@/types/domain';
+import { CheckCircle2, Circle, ChevronDown, ChevronRight, Calendar, Plus } from 'lucide-react';
 
 export default function Sprints() {
   const { user } = useAuth();
+  const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
   const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [backlog, setBacklog] = useState<SprintBacklogItem[]>([]);
   const [tasks, setTasks] = useState<Record<number, SprintTask[]>>({});
   const [tasksLoaded, setTasksLoaded] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [newSprint, setNewSprint] = useState({ name: '', weekNumber: 1, startDate: '', endDate: '', notes: '' });
+  const [newTaskTitle, setNewTaskTitle] = useState<Record<number, string>>({});
+  const [newBacklog, setNewBacklog] = useState({ title: '', details: '', dueDate: '' });
   const [loading, setLoading] = useState(true);
 
-  const clientId = user?.clientId || 1;
-
   useEffect(() => {
-    portalService.getSprints(clientId)
-      .then(data => {
-        setSprints(data);
-        const firstActive = data.find((s: Sprint) => s.status === 'in_progress');
+    if (loadingClients) return;
+    if (!activeClientId) {
+      setLoading(false);
+      return;
+    }
+
+    Promise.all([
+      portalService.getSprints(activeClientId),
+      isInternal ? portalService.getSprintBacklog(activeClientId) : Promise.resolve([]),
+    ])
+      .then(([sprintsData, backlogData]) => {
+        setSprints(sprintsData as Sprint[]);
+        setBacklog(backlogData as SprintBacklogItem[]);
+        const firstActive = (sprintsData as Sprint[]).find((s: Sprint) => s.status === 'in_progress');
         if (firstActive) setExpanded({ [firstActive.id]: true });
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [clientId]);
+  }, [activeClientId, isInternal, loadingClients]);
+
+  const clientId = activeClientId;
 
   const loadTasks = async (sprintId: number) => {
     if (tasksLoaded[sprintId]) return;
@@ -37,6 +53,54 @@ export default function Sprints() {
     const isExpanding = !expanded[sprintId];
     setExpanded(prev => ({ ...prev, [sprintId]: isExpanding }));
     if (isExpanding) loadTasks(sprintId);
+  };
+
+  const addSprint = async () => {
+    if (!clientId || !newSprint.name.trim()) return;
+    await portalService.createSprint({
+      clientId,
+      name: newSprint.name.trim(),
+      weekNumber: Number(newSprint.weekNumber) || 1,
+      startDate: newSprint.startDate || undefined,
+      endDate: newSprint.endDate || undefined,
+      notes: newSprint.notes || undefined,
+    });
+
+    const refreshed = await portalService.getSprints(clientId);
+    setSprints(refreshed as Sprint[]);
+    setNewSprint({ name: '', weekNumber: 1, startDate: '', endDate: '', notes: '' });
+  };
+
+  const addTask = async (sprintId: number) => {
+    const title = (newTaskTitle[sprintId] || '').trim();
+    if (!title) return;
+
+    await portalService.createSprintTask({ sprintId, title });
+    const updatedTasks = await portalService.getSprintTasks(sprintId);
+    setTasks((prev) => ({ ...prev, [sprintId]: updatedTasks }));
+    setTasksLoaded((prev) => ({ ...prev, [sprintId]: true }));
+    setNewTaskTitle((prev) => ({ ...prev, [sprintId]: '' }));
+  };
+
+  const toggleTask = async (task: SprintTask, sprintId: number) => {
+    await portalService.updateSprintTask(task.id, { isCompleted: !task.is_completed });
+    const updatedTasks = await portalService.getSprintTasks(sprintId);
+    setTasks((prev) => ({ ...prev, [sprintId]: updatedTasks }));
+  };
+
+  const addBacklogItem = async () => {
+    if (!clientId || !newBacklog.title.trim()) return;
+    await portalService.createSprintBacklogItem({
+      clientId,
+      title: newBacklog.title,
+      details: newBacklog.details,
+      dueDate: newBacklog.dueDate || undefined,
+      occurredOn: new Date().toISOString().slice(0, 10),
+    });
+
+    const refreshed = await portalService.getSprintBacklog(clientId);
+    setBacklog(refreshed as SprintBacklogItem[]);
+    setNewBacklog({ title: '', details: '', dueDate: '' });
   };
 
   const statusBadge = (status: string) => {
@@ -55,14 +119,67 @@ export default function Sprints() {
     }
   };
 
-  if (loading) return <PageLoader />;
+  if (loading || loadingClients) return <PageLoader />;
+
+  if (!clientId) {
+    return <div className="card p-8 text-center text-gray-500">Selecione um portal para acompanhar as sprints.</div>;
+  }
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Acompanhamento de Sprints</h1>
-        <p className="text-gray-500 mt-1">Visualize o progresso das entregas do seu projeto</p>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isInternal ? 'Editor de Sprints e Backlog' : 'Cronograma de Sprints'}
+        </h1>
+        <p className="text-gray-500 mt-1">
+          {isInternal
+            ? `Gerencie as atividades internas e entregas do cliente ${activeClient?.company_name || ''}`
+            : 'Visualize o progresso das entregas do seu projeto'}
+        </p>
       </div>
+
+      {isInternal && (
+        <div className="card p-4 mb-6">
+          <h2 className="font-semibold text-gray-900 mb-3">Nova Sprint</h2>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <input
+              value={newSprint.name}
+              onChange={(e) => setNewSprint((prev) => ({ ...prev, name: e.target.value }))}
+              className="input-field md:col-span-2"
+              placeholder="Nome da sprint"
+            />
+            <input
+              value={newSprint.weekNumber}
+              onChange={(e) => setNewSprint((prev) => ({ ...prev, weekNumber: Number(e.target.value) || 1 }))}
+              type="number"
+              min={1}
+              className="input-field"
+              placeholder="Semana"
+            />
+            <input
+              value={newSprint.startDate}
+              onChange={(e) => setNewSprint((prev) => ({ ...prev, startDate: e.target.value }))}
+              type="date"
+              className="input-field"
+            />
+            <input
+              value={newSprint.endDate}
+              onChange={(e) => setNewSprint((prev) => ({ ...prev, endDate: e.target.value }))}
+              type="date"
+              className="input-field"
+            />
+          </div>
+          <textarea
+            value={newSprint.notes}
+            onChange={(e) => setNewSprint((prev) => ({ ...prev, notes: e.target.value }))}
+            className="input-field mt-3 h-20"
+            placeholder="Resumo da forma de execucao, prazos e compromissos"
+          />
+          <button onClick={addSprint} className="btn-primary mt-3 inline-flex items-center gap-2">
+            <Plus size={16} /> Criar Sprint
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4">
         {sprints.map(sprint => {
@@ -109,20 +226,36 @@ export default function Sprints() {
                   )}
                   <div className="space-y-2">
                     {sprintTasks.length ? sprintTasks.map((task: SprintTask) => (
-                      <div key={task.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100">
+                      <button
+                        key={task.id}
+                        onClick={() => isInternal && toggleTask(task, sprint.id)}
+                        className={`w-full flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-100 ${isInternal ? 'hover:border-wayzen-300' : ''}`}
+                      >
                         {task.is_completed ? (
                           <CheckCircle2 size={18} className="text-green-500 mt-0.5 flex-shrink-0" />
                         ) : (
                           <Circle size={18} className="text-gray-300 mt-0.5 flex-shrink-0" />
                         )}
-                        <span className={`text-sm ${task.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
+                        <span className={`text-left text-sm ${task.is_completed ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
                           {task.title}
                         </span>
-                      </div>
+                      </button>
                     )) : !tasksLoaded[sprint.id] ? (
                       <p className="text-sm text-gray-400 text-center py-4">Carregando tarefas...</p>
                     ) : (
                       <p className="text-sm text-gray-400 text-center py-4">Nenhuma tarefa cadastrada</p>
+                    )}
+
+                    {isInternal && (
+                      <div className="flex gap-2 pt-2">
+                        <input
+                          value={newTaskTitle[sprint.id] || ''}
+                          onChange={(e) => setNewTaskTitle((prev) => ({ ...prev, [sprint.id]: e.target.value }))}
+                          className="input-field"
+                          placeholder="Adicionar tarefa da sprint"
+                        />
+                        <button onClick={() => addTask(sprint.id)} className="btn-secondary whitespace-nowrap">Adicionar</button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -137,6 +270,44 @@ export default function Sprints() {
           </div>
         )}
       </div>
+
+      {isInternal && (
+        <div className="card p-5 mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Backlog Interno (apenas time Wayzen)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input
+              value={newBacklog.title}
+              onChange={(e) => setNewBacklog((prev) => ({ ...prev, title: e.target.value }))}
+              className="input-field"
+              placeholder="Atividade ou ajuste"
+            />
+            <input
+              value={newBacklog.dueDate}
+              onChange={(e) => setNewBacklog((prev) => ({ ...prev, dueDate: e.target.value }))}
+              type="date"
+              className="input-field"
+            />
+            <button onClick={addBacklogItem} className="btn-primary">Registrar no backlog</button>
+          </div>
+          <textarea
+            value={newBacklog.details}
+            onChange={(e) => setNewBacklog((prev) => ({ ...prev, details: e.target.value }))}
+            className="input-field mt-3 h-20"
+            placeholder="Contexto detalhado e documentacao do processo"
+          />
+
+          <div className="mt-4 space-y-2">
+            {backlog.map((item) => (
+              <div key={item.id} className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                <p className="font-medium text-sm text-gray-900">{item.title}</p>
+                {item.details && <p className="text-sm text-gray-600 mt-1">{item.details}</p>}
+                <p className="text-xs text-gray-400 mt-1">Prazo: {item.due_date ? new Date(item.due_date).toLocaleDateString('pt-BR') : 'nao definido'}</p>
+              </div>
+            ))}
+            {!backlog.length && <p className="text-sm text-gray-400">Nenhum item no backlog interno.</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
