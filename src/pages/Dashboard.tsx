@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { portalService } from '@/lib/services/portal';
+import { getDashboardData } from '@/lib/queries';
 import PageLoader from '@/components/PageLoader';
 import { DashboardData, ProjectUpdate, Sprint } from '@/types/domain';
 import { Ticket, FolderOpen, FileText, BarChart3, Clock, CheckCircle2, AlertTriangle, Milestone } from 'lucide-react';
@@ -13,7 +13,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user?.clientId && user?.role === 'client') return;
     const clientId = user?.clientId || 1;
-    portalService.getDashboard(clientId)
+    getDashboardData(clientId)
       .then(setData)
       .catch(console.error)
       .finally(() => setLoading(false));
