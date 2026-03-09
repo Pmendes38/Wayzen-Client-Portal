@@ -9,7 +9,20 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'wayzen-client-portal-secret-key-2025';
 
-app.use(cors({ origin: true, credentials: true }));
+// Configuração CORS para produção
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  process.env.FRONTEND_URL,
+  process.env.BACKEND_URL
+].filter((origin): origin is string => Boolean(origin));
+
+app.use(cors({ 
+  origin: process.env.NODE_ENV === 'production' 
+    ? allowedOrigins 
+    : true,
+  credentials: true 
+}));
 app.use(express.json());
 app.use(cookieParser());
 
