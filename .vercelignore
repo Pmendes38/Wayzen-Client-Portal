@@ -1,0 +1,7 @@
+src/api/server.ts
+src/api/supabase.ts
+tsconfig.server.json
+dist/
+node_modules/
+*.log
+.DS_Store
