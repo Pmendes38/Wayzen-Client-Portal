@@ -20,6 +20,10 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMes
   }
 }
 
+function isAuthTimeoutError(message?: string) {
+  return !!message && /tempo de autenticacao excedido|authentication timeout|timed out/i.test(message);
+}
+
 function isTransientLockError(message?: string) {
   return !!message && LOCK_ERROR_PATTERN.test(message.toLowerCase());
 }
@@ -138,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const result = await withTimeout(
         supabase.auth.signInWithPassword({ email, password }),
-        12000,
+        20000,
         'Tempo de autenticacao excedido. Verifique a conexao e tente novamente.'
       );
 
@@ -157,6 +161,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (authError) {
+      if (isAuthTimeoutError(authError.message)) {
+        throw new Error('Tempo de autenticacao excedido. Verifique se o Vercel esta com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY corretos e tente novamente.');
+      }
       if (isTransientLockError(authError.message)) {
         throw new Error('Conflito temporario de sessao entre abas. Tente novamente em 2 segundos.');
       }
