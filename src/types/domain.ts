@@ -44,6 +44,8 @@ export interface SprintBacklogItem {
   details?: string | null;
   occurred_on?: string | null;
   due_date?: string | null;
+  created_by_user_id?: number;
+  created_by_name?: string | null;
   status: 'planned' | 'in_progress' | 'done';
   created_at: string;
 }

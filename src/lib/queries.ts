@@ -261,12 +261,35 @@ export async function getBacklogActivities(clientId: number) {
 export async function getSprintBacklog(clientId: number) {
   const { data, error } = await supabase
     .from('sprint_backlog')
-    .select('*')
+    .select(`
+      *,
+      author:users!sprint_backlog_created_by_user_id_fkey(name)
+    `)
     .eq('client_id', clientId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data;
+
+  return (data || []).map((item: any) => ({
+    ...item,
+    created_by_name: item.author?.name || null,
+  }));
+}
+
+export async function updateSprintBacklogItem(backlogId: number, updates: {
+  status?: 'planned' | 'in_progress' | 'done';
+  sprintId?: number | null;
+}) {
+  const payload: Record<string, unknown> = {};
+  if (updates.status) payload.status = updates.status;
+  if (updates.sprintId !== undefined) payload.sprint_id = updates.sprintId;
+
+  const { error } = await supabase
+    .from('sprint_backlog')
+    .update(payload)
+    .eq('id', backlogId);
+
+  if (error) throw error;
 }
 
 export async function createSprintBacklogItem(itemData: {

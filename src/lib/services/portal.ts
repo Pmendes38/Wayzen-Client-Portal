@@ -63,6 +63,10 @@ export const portalService = {
   }) => queries.createSprintTask(payload),
   updateSprintTask: (taskId: number, payload: { isCompleted?: boolean }) => queries.updateSprintTask(taskId, payload),
   getSprintBacklog: (clientId: number) => queries.getSprintBacklog(clientId),
+  updateSprintBacklogItem: (backlogId: number, payload: {
+    status?: 'planned' | 'in_progress' | 'done';
+    sprintId?: number | null;
+  }) => queries.updateSprintBacklogItem(backlogId, payload),
   getBacklogActivities: (clientId: number) => queries.getBacklogActivities(clientId),
   createSprintBacklogItem: (payload: {
     clientId: number;

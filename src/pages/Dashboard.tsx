@@ -1,16 +1,41 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { usePortalScope } from '@/hooks/usePortalScope';
 import { getDashboardData } from '@/lib/queries';
 import PageLoader from '@/components/PageLoader';
-import { DashboardData, ProjectUpdate, Sprint } from '@/types/domain';
-import { Ticket, FolderOpen, FileText, BarChart3, Clock, CheckCircle2, AlertTriangle, Milestone, ShieldCheck } from 'lucide-react';
+import { DashboardData } from '@/types/domain';
+import { Bell, CalendarDays, MessageSquareMore, Plus, TrendingUp } from 'lucide-react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from 'recharts';
+
+type CalendarEvent = {
+  id: number;
+  date: string;
+  title: string;
+  type: 'sprint' | 'meeting' | 'commitment';
+};
+
+const monthSales = [
+  { name: 'Sem 1', value: 18000 },
+  { name: 'Sem 2', value: 22400 },
+  { name: 'Sem 3', value: 20800 },
+  { name: 'Sem 4', value: 25200 },
+];
+
+const daySales = [
+  { name: '09h', value: 6 },
+  { name: '11h', value: 9 },
+  { name: '13h', value: 5 },
+  { name: '15h', value: 12 },
+  { name: '17h', value: 8 },
+];
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { isInternal, activeClient, activeClientId, loadingClients } = usePortalScope();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [newEvent, setNewEvent] = useState({ date: '', title: '', type: 'commitment' as CalendarEvent['type'] });
 
   useEffect(() => {
     if (loadingClients) return;
@@ -20,168 +45,202 @@ export default function Dashboard() {
     }
 
     getDashboardData(activeClientId)
-      .then(setData)
+      .then((res) => {
+        setData(res);
+
+        const fromSprints = (res.activeSprints || [])
+          .filter((s) => s.end_date)
+          .map((s, idx) => ({
+            id: idx + 1,
+            date: s.end_date as string,
+            title: `Fim da ${s.name}`,
+            type: 'sprint' as const,
+          }));
+
+        setEvents(fromSprints);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [activeClientId, loadingClients, user]);
+  }, [activeClientId, loadingClients]);
 
-  const clientId = activeClientId;
+  const progressPercent = useMemo(() => {
+    if (!data?.sprintProgress.total) return 0;
+    return Math.round((data.sprintProgress.completed / data.sprintProgress.total) * 100);
+  }, [data]);
+
+  const unreadNotifications = useMemo(() => {
+    const base = data?.openTickets || 0;
+    return Math.max(0, base);
+  }, [data]);
+
+  const conversationHint = useMemo(() => {
+    if (!data?.recentUpdates?.length) return 'Sem novas conversas no momento';
+    const latest = data.recentUpdates[0];
+    return `Ultima conversa: ${latest.title}`;
+  }, [data]);
+
+  const addCalendarEvent = () => {
+    if (!newEvent.date || !newEvent.title.trim()) return;
+    setEvents((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        date: newEvent.date,
+        title: newEvent.title.trim(),
+        type: newEvent.type,
+      },
+    ]);
+    setNewEvent({ date: '', title: '', type: 'commitment' });
+  };
 
   if (loading || loadingClients) return <PageLoader />;
 
-  if (!clientId) {
-    return (
-      <div className="card p-8 text-center text-gray-500">
-        Nenhum cliente disponivel para este perfil.
-      </div>
-    );
+  if (!activeClientId) {
+    return <div className="card p-8 text-center text-gray-500">Selecione um portal para visualizar o dashboard.</div>;
   }
 
-  const progressPercent = data?.sprintProgress.total ? Math.round((data.sprintProgress.completed / data.sprintProgress.total) * 100) : 0;
-
-  const typeIcon = (type: string) => {
-    switch (type) {
-      case 'milestone': return <Milestone size={16} className="text-wayzen-500" />;
-      case 'alert': return <AlertTriangle size={16} className="text-yellow-500" />;
-      case 'delivery': return <CheckCircle2 size={16} className="text-green-500" />;
-      default: return <Clock size={16} className="text-blue-500" />;
-    }
-  };
-
-  const typeBadge = (type: string) => {
-    switch (type) {
-      case 'milestone': return 'badge-purple';
-      case 'alert': return 'badge-yellow';
-      case 'delivery': return 'badge-green';
-      default: return 'badge-blue';
-    }
-  };
+  const companyName = activeClient?.company_name || data?.client?.company_name || 'Cliente';
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Olá, {user?.name}!</h1>
-        <p className="text-gray-500 mt-1">
-          {isInternal
-            ? `Visao administrativa do portal ${activeClient?.company_name || data?.client?.company_name || ''}`
-            : data?.client
-              ? `Acompanhe o progresso do projeto de ${data.client.company_name}`
-              : 'Bem-vindo ao Portal do Cliente Wayzen'}
-        </p>
-      </div>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Olá, {isInternal ? 'Administrador' : user?.name}!</h1>
+          <p className="text-slate-500 mt-1">
+            {isInternal
+              ? `Visao administrativa do portal ${companyName}`
+              : `Visao executiva do projeto ${companyName}`}
+          </p>
+        </div>
 
-      {!isInternal && (
-        <div className="card p-4 mb-6 bg-green-50 border-green-100">
-          <div className="flex items-start gap-3">
-            <ShieldCheck size={20} className="text-green-600 mt-0.5" />
-            <div>
-              <p className="font-semibold text-green-900">Tudo sob controle</p>
-              <p className="text-sm text-green-800">Seu cronograma esta atualizado e o time interno registra as entregas diariamente para manter transparencia total.</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="bg-slate-100 text-slate-700 rounded-xl px-4 py-2.5 min-w-[280px]">
+            <p className="text-xs uppercase tracking-[0.1em] text-slate-400">Conversas</p>
+            <p className="text-sm font-semibold mt-0.5">{conversationHint}</p>
           </div>
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="card p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">{isInternal ? 'Tickets em Atendimento' : 'Tickets Abertos'}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{data?.openTickets || 0}</p>
-            </div>
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-              <Ticket size={20} className="text-orange-600" />
-            </div>
-          </div>
-        </div>
-        <div className="card p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">{isInternal ? 'Itens Documentados' : 'Documentos'}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{data?.totalDocuments || 0}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <FolderOpen size={20} className="text-blue-600" />
-            </div>
-          </div>
-        </div>
-        <div className="card p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">{isInternal ? 'Relatorios Emitidos' : 'Relatórios'}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{data?.totalReports || 0}</p>
-            </div>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <FileText size={20} className="text-green-600" />
-            </div>
-          </div>
-        </div>
-        <div className="card p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">{isInternal ? 'Execucao de Sprint' : 'Progresso Sprint'}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{progressPercent}%</p>
-            </div>
-            <div className="w-10 h-10 bg-wayzen-100 rounded-lg flex items-center justify-center">
-              <BarChart3 size={20} className="text-wayzen-600" />
-            </div>
-          </div>
-          <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
-            <div className="bg-wayzen-500 h-2 rounded-full transition-all" style={{ width: `${progressPercent}%` }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Updates */}
-        <div className="card">
-          <div className="p-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">{isInternal ? 'Diario de Projeto' : 'Atualizações Recentes'}</h2>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {data?.recentUpdates?.length ? data.recentUpdates.map((update: ProjectUpdate) => (
-              <div key={update.id} className="p-4 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start gap-3">
-                  {typeIcon(update.type)}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-medium text-gray-900">{update.title}</h3>
-                      <span className={`badge ${typeBadge(update.type)}`}>
-                        {update.type === 'milestone' ? 'Marco' : update.type === 'alert' ? 'Alerta' : update.type === 'delivery' ? 'Entrega' : 'Atualização'}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 line-clamp-2">{update.content}</p>
-                    <p className="text-xs text-gray-400 mt-1">por {update.author_name} • {new Date(update.created_at).toLocaleDateString('pt-BR')}</p>
-                  </div>
-                </div>
-              </div>
-            )) : (
-              <div className="p-8 text-center text-gray-400">Nenhuma atualização ainda</div>
+          <button className="relative w-11 h-11 rounded-xl bg-slate-900 text-white inline-flex items-center justify-center">
+            <Bell size={18} />
+            {unreadNotifications > 0 && (
+              <span className="absolute -top-2 -right-2 text-[10px] font-bold bg-emerald-500 text-white rounded-full w-5 h-5 inline-flex items-center justify-center">
+                {unreadNotifications}
+              </span>
             )}
+          </button>
+        </div>
+      </div>
+
+      <div className="card p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-slate-700">
+        <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Resumo da conclusao das sprints</p>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-5xl font-extrabold leading-none">{progressPercent}%</p>
+            <p className="text-slate-300 mt-2">Taxa geral de conclusao do ciclo atual</p>
+          </div>
+          <div className="rounded-xl bg-white/10 px-4 py-3 border border-white/10">
+            <p className="text-sm text-slate-200">{data?.sprintProgress.completed || 0} tarefas concluidas de {data?.sprintProgress.total || 0}</p>
+            <div className="mt-2 h-2.5 rounded-full bg-white/10 w-64 max-w-full">
+              <div className="h-2.5 rounded-full bg-emerald-400" style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-900">Grafico resumo de vendas no mes</h2>
+            <span className="badge badge-green inline-flex items-center gap-1"><TrendingUp size={13} /> +12.3%</span>
+          </div>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={monthSales} margin={{ left: -16, right: 6, top: 6 }}>
+                <defs>
+                  <linearGradient id="monthFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.45} />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(v: number) => [`R$ ${v.toLocaleString('pt-BR')}`, 'Vendas']} />
+                <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2.5} fill="url(#monthFill)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Active Sprints */}
-        <div className="card">
-          <div className="p-5 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">{isInternal ? 'Sprints em Execucao' : 'Sprints Ativos'}</h2>
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-slate-900">Grafico resumo de vendas no dia</h2>
+            <span className="badge badge-blue inline-flex items-center gap-1"><MessageSquareMore size={13} /> Em tempo real</span>
           </div>
-          <div className="divide-y divide-gray-100">
-            {data?.activeSprints?.length ? data.activeSprints.map((sprint: Sprint) => (
-              <div key={sprint.id} className="p-4 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-900">{sprint.name}</h3>
-                  <span className="badge badge-blue">Em progresso</span>
-                </div>
-                <p className="text-xs text-gray-500">
-                  {sprint.start_date && sprint.end_date && `${new Date(sprint.start_date).toLocaleDateString('pt-BR')} - ${new Date(sprint.end_date).toLocaleDateString('pt-BR')}`}
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={daySales} margin={{ left: -18, right: 8, top: 6 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(v: number) => [`${v} vendas`, 'Volume']} />
+                <Bar dataKey="value" fill="#0ea5e9" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-slate-900">Calendario de marcos, reunioes e compromissos</h2>
+          <span className="badge badge-purple inline-flex items-center gap-1"><CalendarDays size={13} /> Editavel</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+          <input
+            type="date"
+            className="input-field"
+            value={newEvent.date}
+            onChange={(e) => setNewEvent((prev) => ({ ...prev, date: e.target.value }))}
+          />
+          <input
+            className="input-field md:col-span-2"
+            placeholder="Titulo do compromisso"
+            value={newEvent.title}
+            onChange={(e) => setNewEvent((prev) => ({ ...prev, title: e.target.value }))}
+          />
+          <div className="flex gap-2">
+            <select
+              className="input-field"
+              value={newEvent.type}
+              onChange={(e) => setNewEvent((prev) => ({ ...prev, type: e.target.value as CalendarEvent['type'] }))}
+            >
+              <option value="sprint">Fim de Sprint</option>
+              <option value="meeting">Reuniao</option>
+              <option value="commitment">Compromisso</option>
+            </select>
+            <button className="btn-primary" onClick={addCalendarEvent}><Plus size={14} /></button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {events
+            .slice()
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .map((event) => (
+              <div key={event.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-[0.1em] text-slate-500">
+                  {event.type === 'sprint' ? 'Sprint' : event.type === 'meeting' ? 'Reuniao' : 'Compromisso'}
                 </p>
+                <p className="font-semibold text-slate-900 mt-1">{event.title}</p>
+                <p className="text-sm text-slate-500 mt-1">{new Date(event.date).toLocaleDateString('pt-BR')}</p>
               </div>
-            )) : (
-              <div className="p-8 text-center text-gray-400">Nenhum sprint ativo</div>
-            )}
-          </div>
+            ))}
+
+          {!events.length && (
+            <div className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-slate-400 md:col-span-2 lg:col-span-3">
+              Nenhum evento registrado ainda.
+            </div>
+          )}
         </div>
       </div>
     </div>

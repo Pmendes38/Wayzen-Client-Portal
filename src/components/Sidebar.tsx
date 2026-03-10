@@ -22,7 +22,6 @@ export default function Sidebar() {
     ? [
         { to: '/', icon: LayoutDashboard, label: 'Dashboard Operacional' },
         { to: '/portal-select', icon: Building2, label: 'Escolher Portal' },
-        { to: '/portals', icon: Building2, label: 'Portais de Clientes' },
         { to: '/sprints', icon: BarChart3, label: 'Editor de Sprints' },
         { to: '/daily-logs', icon: ClipboardPen, label: 'Registro Diário' },
         { to: '/meetings', icon: CalendarDays, label: 'Agenda e Chamadas' },
