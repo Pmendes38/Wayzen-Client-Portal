@@ -172,3 +172,49 @@ export interface ContactUser {
   name: string;
   role: UserRole;
 }
+
+export type CalendarEventType = 'sprint_delivery' | 'meeting' | 'transcript' | 'general';
+
+export interface ProjectCalendarEvent {
+  id: number;
+  title: string;
+  start_at: string;
+  end_at: string;
+  type: CalendarEventType;
+  description?: string | null;
+  participant_ids?: number[];
+}
+
+export interface MarketingMetricPoint {
+  period: string;
+  leads: number;
+  costPerLead: number;
+  activeCampaigns: number;
+  conversionRate: number;
+}
+
+export interface SalesMetricPoint {
+  period: string;
+  meetings: number;
+  proposals: number;
+  dealsClosed: number;
+  averageTicket: number;
+}
+
+export interface CorrelationMetricPoint {
+  label: string;
+  leads: number;
+  deals: number;
+}
+
+export interface FunnelStagePoint {
+  stage: string;
+  value: number;
+}
+
+export interface MarketingSalesAnalytics {
+  marketing: MarketingMetricPoint[];
+  sales: SalesMetricPoint[];
+  correlation: CorrelationMetricPoint[];
+  funnel: FunnelStagePoint[];
+}
