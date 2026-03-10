@@ -21,11 +21,12 @@ export default function Sidebar() {
   const navItems = isInternal
     ? [
         { to: '/', icon: LayoutDashboard, label: 'Dashboard Operacional' },
+        { to: '/portal-select', icon: Building2, label: 'Escolher Portal' },
         { to: '/portals', icon: Building2, label: 'Portais de Clientes' },
         { to: '/sprints', icon: BarChart3, label: 'Editor de Sprints' },
         { to: '/daily-logs', icon: ClipboardPen, label: 'Registro Diário' },
         { to: '/meetings', icon: CalendarDays, label: 'Agenda e Chamadas' },
-        { to: '/tickets', icon: Ticket, label: 'Suporte' },
+        { to: '/tickets', icon: Ticket, label: 'Chat do Projeto' },
         { to: '/documents', icon: FolderOpen, label: 'Documentos' },
         { to: '/reports', icon: FileText, label: 'Relatórios' },
         { to: '/notifications', icon: Bell, label: 'Notificações' },
@@ -34,7 +35,7 @@ export default function Sidebar() {
         { to: '/', icon: LayoutDashboard, label: 'Meu Projeto' },
         { to: '/sprints', icon: BarChart3, label: 'Cronograma' },
         { to: '/meetings', icon: CalendarDays, label: 'Agenda' },
-        { to: '/tickets', icon: Ticket, label: 'Suporte' },
+        { to: '/tickets', icon: Ticket, label: 'Chat do Projeto' },
         { to: '/documents', icon: FolderOpen, label: 'Documentos' },
         { to: '/reports', icon: FileText, label: 'Relatórios' },
         { to: '/notifications', icon: Bell, label: 'Notificações' },

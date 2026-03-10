@@ -49,11 +49,9 @@ export function usePortalScope() {
       .then((data) => {
         const normalized = (data || []) as Client[];
         setClients(normalized);
-
-        const stored = Number(localStorage.getItem(STORAGE_KEY) || 0);
-        const firstId = normalized[0]?.id ?? null;
-        const safeId = normalized.some((c) => c.id === stored) ? stored : firstId;
-        setActiveClientIdState(safeId);
+        // Fluxo obrigatorio: interno sempre escolhe o portal antes de acessar os modulos.
+        setActiveClientIdState(null);
+        localStorage.removeItem(STORAGE_KEY);
       })
       .catch(() => {
         setClients([]);
@@ -69,8 +67,12 @@ export function usePortalScope() {
     };
   }, [isInternal, user]);
 
-  const setActiveClientId = (clientId: number) => {
+  const setActiveClientId = (clientId: number | null) => {
     setActiveClientIdState(clientId);
+    if (clientId === null) {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, String(clientId));
   };
 

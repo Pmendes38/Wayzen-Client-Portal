@@ -27,8 +27,11 @@ export interface Sprint {
 export interface SprintTask {
   id: number;
   sprint_id: number;
+  backlog_item_id?: number | null;
   title: string;
   description?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   is_completed: boolean;
   task_order?: number;
 }
@@ -138,4 +141,32 @@ export interface NotificationItem {
 
 export interface SuccessResponse {
   success: boolean;
+}
+
+export interface ChatRoom {
+  id: number;
+  client_id: number;
+  room_type: 'general' | 'internal' | 'direct';
+  name: string;
+  created_at: string;
+  contact_user_id?: number | null;
+  contact_name?: string | null;
+  contact_role?: UserRole | null;
+  unread_count?: number;
+}
+
+export interface ChatMessage {
+  id: number;
+  room_id: number;
+  user_id: number;
+  message: string;
+  created_at: string;
+  author_name: string;
+  author_role: UserRole;
+}
+
+export interface ContactUser {
+  id: number;
+  name: string;
+  role: UserRole;
 }

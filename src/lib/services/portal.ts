@@ -54,12 +54,16 @@ export const portalService = {
   }) => queries.updateSprint(sprintId, payload),
   createSprintTask: (payload: {
     sprintId: number;
+    backlogItemId?: number | null;
     title: string;
     description?: string;
+    startDate?: string;
+    endDate?: string;
     taskOrder?: number;
   }) => queries.createSprintTask(payload),
   updateSprintTask: (taskId: number, payload: { isCompleted?: boolean }) => queries.updateSprintTask(taskId, payload),
   getSprintBacklog: (clientId: number) => queries.getSprintBacklog(clientId),
+  getBacklogActivities: (clientId: number) => queries.getBacklogActivities(clientId),
   createSprintBacklogItem: (payload: {
     clientId: number;
     sprintId?: number | null;
@@ -76,6 +80,13 @@ export const portalService = {
     queries.updateTicket(ticketId, { status }),
   addTicketMessage: (ticketId: number, message: string) => 
     queries.createTicketMessage({ ticketId, message }),
+
+  getChatRooms: (clientId: number) => queries.getChatRooms(clientId),
+  getChatContacts: (clientId: number) => queries.getChatContacts(clientId),
+  getOrCreateDirectChatRoom: (clientId: number, contactUserId: number) =>
+    queries.getOrCreateDirectChatRoom(clientId, contactUserId),
+  getChatMessages: (roomId: number) => queries.getChatMessages(roomId),
+  createChatMessage: (roomId: number, message: string) => queries.createChatMessage(roomId, message),
 
   getDocuments: (clientId: number) => queries.getDocuments(clientId),
   createDocument: (payload: DocumentForm) => queries.createDocument(payload),

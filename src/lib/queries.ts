@@ -200,16 +200,22 @@ export async function updateSprint(sprintId: number, updates: {
 
 export async function createSprintTask(taskData: {
   sprintId: number;
+  backlogItemId?: number | null;
   title: string;
   description?: string;
+  startDate?: string;
+  endDate?: string;
   taskOrder?: number;
 }) {
   const { data, error } = await supabase
     .from('sprint_tasks')
     .insert({
       sprint_id: taskData.sprintId,
+      backlog_item_id: taskData.backlogItemId ?? null,
       title: taskData.title,
       description: taskData.description,
+      start_date: taskData.startDate,
+      end_date: taskData.endDate,
       week_number: 0,
       task_order: taskData.taskOrder || 0,
       is_completed: false,
@@ -234,6 +240,22 @@ export async function updateSprintTask(taskId: number, updates: { isCompleted?: 
     .eq('id', taskId);
 
   if (error) throw error;
+}
+
+export async function getBacklogActivities(clientId: number) {
+  const { data, error } = await supabase
+    .from('sprint_tasks')
+    .select('*, sprints!inner(client_id, name)')
+    .eq('sprints.client_id', clientId)
+    .not('backlog_item_id', 'is', null)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map((item: any) => ({
+    ...item,
+    sprint_name: item.sprints?.name,
+  }));
 }
 
 export async function getSprintBacklog(clientId: number) {
@@ -418,6 +440,162 @@ export async function createTicketMessage(messageData: {
       is_internal: (messageData.isInternal && user.role !== 'client') ? true : false,
     })
     .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ─── Internal + Client Chat ────────────────────────────────────────
+export async function getChatRooms(clientId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const { data, error } = await supabase
+    .from('chat_rooms')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+
+  const rooms = (data || []).filter((room: any) => {
+    if (room.room_type === 'internal' && user.role === 'client') return false;
+    if (room.room_type !== 'direct') return true;
+    return room.direct_user_a_id === user.id || room.direct_user_b_id === user.id || user.role !== 'client';
+  });
+
+  const directOtherIds = Array.from(new Set(
+    rooms
+      .filter((room: any) => room.room_type === 'direct')
+      .map((room: any) => (room.direct_user_a_id === user.id ? room.direct_user_b_id : room.direct_user_a_id))
+      .filter(Boolean)
+  ));
+
+  let peopleById: Record<number, { name: string; role: string }> = {};
+  if (directOtherIds.length) {
+    const { data: usersData, error: usersError } = await supabase
+      .from('users')
+      .select('id, name, role')
+      .in('id', directOtherIds);
+
+    if (usersError) throw usersError;
+
+    peopleById = (usersData || []).reduce((acc: Record<number, { name: string; role: string }>, person: any) => {
+      acc[person.id] = { name: person.name, role: person.role };
+      return acc;
+    }, {});
+  }
+
+  const rankByType: Record<string, number> = { general: 0, direct: 1, internal: 2 };
+  return rooms
+    .map((room: any) => {
+      if (room.room_type !== 'direct') return room;
+      const otherId = room.direct_user_a_id === user.id ? room.direct_user_b_id : room.direct_user_a_id;
+      const person = peopleById[otherId];
+      return {
+        ...room,
+        contact_user_id: otherId,
+        contact_name: person?.name || null,
+        contact_role: person?.role || null,
+      };
+    })
+    .sort((a: any, b: any) => (rankByType[a.room_type] || 99) - (rankByType[b.room_type] || 99));
+}
+
+export async function getChatContacts(clientId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const query = supabase
+    .from('users')
+    .select('id, name, role')
+    .eq('is_active', true)
+    .neq('id', user.id)
+    .order('name', { ascending: true });
+
+  if (user.role === 'client') {
+    const { data, error } = await query.in('role', ['admin', 'consultant']);
+    if (error) throw error;
+    return data || [];
+  }
+
+  const { data, error } = await query.eq('role', 'client').eq('client_id', clientId);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getOrCreateDirectChatRoom(clientId: number, contactUserId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  if (user.id === contactUserId) {
+    throw new Error('Nao e permitido abrir chat direto com o proprio usuario.');
+  }
+
+  const userA = Math.min(user.id, contactUserId);
+  const userB = Math.max(user.id, contactUserId);
+
+  const existing = await supabase
+    .from('chat_rooms')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('room_type', 'direct')
+    .eq('direct_user_a_id', userA)
+    .eq('direct_user_b_id', userB)
+    .maybeSingle();
+
+  if (existing.error) throw existing.error;
+  if (existing.data) return existing.data;
+
+  const { data, error } = await supabase
+    .from('chat_rooms')
+    .insert({
+      client_id: clientId,
+      room_type: 'direct',
+      name: 'Chat Direto',
+      direct_user_a_id: userA,
+      direct_user_b_id: userB,
+      created_by_user_id: user.id,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getChatMessages(roomId: number) {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select(`
+      *,
+      author:users(name, role)
+    `)
+    .eq('room_id', roomId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+
+  return (data || []).map((message: any) => ({
+    ...message,
+    author_name: message.author?.name,
+    author_role: message.author?.role,
+  }));
+}
+
+export async function createChatMessage(roomId: number, message: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert({
+      room_id: roomId,
+      user_id: user.id,
+      message,
+    })
+    .select('*')
     .single();
 
   if (error) throw error;

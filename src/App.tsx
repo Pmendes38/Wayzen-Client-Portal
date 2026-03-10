@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { usePortalScope } from '@/hooks/usePortalScope';
 import Layout from '@/components/Layout';
 import Login from '@/pages/Login';
+import PortalSelect from '@/pages/PortalSelect';
 import Dashboard from '@/pages/Dashboard';
 import Sprints from '@/pages/Sprints';
 import Tickets from '@/pages/Tickets';
@@ -20,6 +22,19 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function PortalGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const { activeClientId, loadingClients, isInternal } = usePortalScope();
+
+  if (loadingClients) return <PageLoader fullScreen />;
+
+  if (isInternal && user && !activeClientId) {
+    return <Navigate to="/portal-select" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   const { isAuthenticated, loading } = useAuth();
 
@@ -28,16 +43,24 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+      <Route
+        path="/portal-select"
+        element={
+          <ProtectedRoute>
+            <PortalSelect />
+          </ProtectedRoute>
+        }
+      />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/sprints" element={<Sprints />} />
-        <Route path="/tickets" element={<Tickets />} />
-        <Route path="/documents" element={<Documents />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="/portals" element={<ClientPortals />} />
-        <Route path="/daily-logs" element={<DailyLogs />} />
-        <Route path="/meetings" element={<Meetings />} />
+        <Route path="/" element={<PortalGuard><Dashboard /></PortalGuard>} />
+        <Route path="/sprints" element={<PortalGuard><Sprints /></PortalGuard>} />
+        <Route path="/tickets" element={<PortalGuard><Tickets /></PortalGuard>} />
+        <Route path="/documents" element={<PortalGuard><Documents /></PortalGuard>} />
+        <Route path="/reports" element={<PortalGuard><Reports /></PortalGuard>} />
+        <Route path="/notifications" element={<PortalGuard><Notifications /></PortalGuard>} />
+        <Route path="/portals" element={<PortalGuard><ClientPortals /></PortalGuard>} />
+        <Route path="/daily-logs" element={<PortalGuard><DailyLogs /></PortalGuard>} />
+        <Route path="/meetings" element={<PortalGuard><Meetings /></PortalGuard>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

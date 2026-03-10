@@ -18,7 +18,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate('/portal-select');
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
     } finally {

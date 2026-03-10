@@ -254,6 +254,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Usuário não autorizado no portal');
     }
 
+    // Garante o fluxo login -> escolha de portal para perfis internos.
+    localStorage.removeItem('wayzen.activeClientId');
+
     setUser({
       id: profile.id,
       email: profile.email,
@@ -265,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem('wayzen.activeClientId');
     setUser(null);
   };
 
