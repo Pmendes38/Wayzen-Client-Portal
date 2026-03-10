@@ -49,9 +49,11 @@ export function usePortalScope() {
       .then((data) => {
         const normalized = (data || []) as Client[];
         setClients(normalized);
-        // Fluxo obrigatorio: interno sempre escolhe o portal antes de acessar os modulos.
-        setActiveClientIdState(null);
-        localStorage.removeItem(STORAGE_KEY);
+
+        // Mantem selecao durante a sessao; login/logout limpam para forcar nova escolha.
+        const stored = Number(localStorage.getItem(STORAGE_KEY) || 0);
+        const safeId = normalized.some((c) => c.id === stored) ? stored : null;
+        setActiveClientIdState(safeId);
       })
       .catch(() => {
         setClients([]);
