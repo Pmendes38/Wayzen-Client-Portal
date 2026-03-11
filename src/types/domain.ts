@@ -22,6 +22,7 @@ export interface Sprint {
   week_number: number;
   start_date?: string | null;
   end_date?: string | null;
+  notes?: string | null;
 }
 
 export interface SprintTask {

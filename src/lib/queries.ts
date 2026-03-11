@@ -152,6 +152,53 @@ export async function getSprintTasks(sprintId: number) {
   return data;
 }
 
+// ─── Calendar sync helpers (fire-and-forget) ────────────────────────────────
+async function upsertSprintCalendarEvent(
+  clientId: number,
+  sprintId: number,
+  name: string,
+  endDate: string,
+): Promise<void> {
+  await supabase
+    .from('project_calendar_events')
+    .upsert(
+      {
+        id: 900000 + sprintId,
+        client_id: clientId,
+        title: `Entrega: ${name}`,
+        start_at: `${endDate}T09:00:00Z`,
+        end_at: `${endDate}T09:00:00Z`,
+        type: 'sprint_delivery',
+        description: `Entrega da sprint "${name}"`,
+        participant_ids: [],
+      },
+      { onConflict: 'id' },
+    );
+}
+
+async function upsertBacklogCalendarEvent(
+  clientId: number,
+  itemId: number,
+  title: string,
+  dueDate: string,
+): Promise<void> {
+  await supabase
+    .from('project_calendar_events')
+    .upsert(
+      {
+        id: 800000 + itemId,
+        client_id: clientId,
+        title: `Prazo: ${title}`,
+        start_at: `${dueDate}T09:00:00Z`,
+        end_at: `${dueDate}T09:00:00Z`,
+        type: 'general',
+        description: `Atividade: ${title}`,
+        participant_ids: [],
+      },
+      { onConflict: 'id' },
+    );
+}
+
 export async function createSprint(sprintData: {
   clientId: number;
   name: string;
@@ -175,6 +222,9 @@ export async function createSprint(sprintData: {
     .single();
 
   if (error) throw error;
+  if (sprintData.endDate && data) {
+    upsertSprintCalendarEvent(sprintData.clientId, data.id, sprintData.name, sprintData.endDate).catch(console.error);
+  }
   return data;
 }
 
@@ -183,12 +233,15 @@ export async function updateSprint(sprintId: number, updates: {
   startDate?: string;
   endDate?: string;
   notes?: string;
+  name?: string;
+  clientId?: number;
 }) {
   const payload: Record<string, unknown> = {};
   if (updates.status) payload.status = updates.status;
   if (updates.startDate !== undefined) payload.start_date = updates.startDate;
   if (updates.endDate !== undefined) payload.end_date = updates.endDate;
   if (updates.notes !== undefined) payload.notes = updates.notes;
+  if (updates.name !== undefined) payload.name = updates.name;
 
   const { error } = await supabase
     .from('sprints')
@@ -196,6 +249,9 @@ export async function updateSprint(sprintId: number, updates: {
     .eq('id', sprintId);
 
   if (error) throw error;
+  if (updates.endDate && updates.clientId && updates.name) {
+    upsertSprintCalendarEvent(updates.clientId, sprintId, updates.name, updates.endDate).catch(console.error);
+  }
 }
 
 export async function createSprintTask(taskData: {
@@ -227,12 +283,14 @@ export async function createSprintTask(taskData: {
   return data;
 }
 
-export async function updateSprintTask(taskId: number, updates: { isCompleted?: boolean }) {
+export async function updateSprintTask(taskId: number, updates: { isCompleted?: boolean; title?: string; description?: string }) {
   const payload: Record<string, unknown> = {};
   if (updates.isCompleted !== undefined) {
     payload.is_completed = updates.isCompleted;
     payload.completed_at = updates.isCompleted ? new Date().toISOString() : null;
   }
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.description !== undefined) payload.description = updates.description;
 
   const { error } = await supabase
     .from('sprint_tasks')
@@ -279,6 +337,9 @@ export async function getSprintBacklog(clientId: number) {
 export async function updateSprintBacklogItem(backlogId: number, updates: {
   status?: 'planned' | 'in_progress' | 'done';
   sprintId?: number | null;
+  clientId?: number;
+  title?: string;
+  dueDate?: string;
 }) {
   const payload: Record<string, unknown> = {};
   if (updates.status) payload.status = updates.status;
@@ -290,6 +351,9 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
     .eq('id', backlogId);
 
   if (error) throw error;
+  if (updates.dueDate && updates.clientId && updates.title) {
+    upsertBacklogCalendarEvent(updates.clientId, backlogId, updates.title, updates.dueDate).catch(console.error);
+  }
 }
 
 export async function createSprintBacklogItem(itemData: {
@@ -319,6 +383,9 @@ export async function createSprintBacklogItem(itemData: {
     .single();
 
   if (error) throw error;
+  if (itemData.dueDate && data) {
+    upsertBacklogCalendarEvent(itemData.clientId, data.id, itemData.title, itemData.dueDate).catch(console.error);
+  }
   return data;
 }
 

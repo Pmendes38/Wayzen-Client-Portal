@@ -92,7 +92,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <button onClick={() => navigate('/sprints')} className="card w-full text-left p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-slate-700 hover:opacity-95">
+      <button onClick={() => navigate('/sprints')} className="card w-full text-left p-6 bg-gradient-to-r from-wayzen-700 to-wayzen-900 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 text-white border-wayzen-600 dark:border-slate-700 hover:opacity-95">
         <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Resumo da conclusao das sprints</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>

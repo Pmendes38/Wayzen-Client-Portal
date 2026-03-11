@@ -3,7 +3,7 @@ import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import { SprintBacklogItem, Sprint } from '@/types/domain';
 import PageLoader from '@/components/PageLoader';
-import { CalendarDays, CheckCircle2, Circle, GripVertical, Plus, UserCircle2 } from 'lucide-react';
+import { CheckCircle2, Circle, GripVertical, Plus, UserCircle2 } from 'lucide-react';
 
 type KanbanColumn = 'backlog' | 'todo' | 'doing' | 'finished';
 
@@ -198,16 +198,21 @@ export default function Kanban() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 inline-flex items-center justify-center text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
-                      <Circle size={13} />
-                    </span>
-                    <span className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 inline-flex items-center justify-center text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
-                      <CalendarDays size={13} />
-                    </span>
-                    <span className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 inline-flex items-center justify-center text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
-                      <CheckCircle2 size={13} />
-                    </span>
+                  <div className="mt-3 flex items-center justify-end">
+                    <button
+                      onClick={() => moveBacklogCard(item.id, item.status === 'done' ? 'doing' : 'finished').catch(console.error)}
+                      className={`w-7 h-7 rounded-md border inline-flex items-center justify-center transition-colors ${
+                        item.status === 'done'
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-500 dark:bg-emerald-900/30 dark:border-emerald-700/50'
+                          : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400'
+                      }`}
+                      aria-label={item.status === 'done' ? 'Marcar como pendente' : 'Marcar como concluida'}
+                      title={item.status === 'done' ? 'Desfazer conclusao' : 'Marcar como concluida'}
+                    >
+                      {item.status === 'done'
+                        ? <CheckCircle2 size={13} />
+                        : <Circle size={13} />}
+                    </button>
                   </div>
                 </div>
               ))}

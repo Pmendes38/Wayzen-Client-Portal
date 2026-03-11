@@ -51,6 +51,8 @@ export const portalService = {
     startDate?: string;
     endDate?: string;
     notes?: string;
+    name?: string;
+    clientId?: number;
   }) => queries.updateSprint(sprintId, payload),
   createSprintTask: (payload: {
     sprintId: number;
@@ -61,11 +63,14 @@ export const portalService = {
     endDate?: string;
     taskOrder?: number;
   }) => queries.createSprintTask(payload),
-  updateSprintTask: (taskId: number, payload: { isCompleted?: boolean }) => queries.updateSprintTask(taskId, payload),
+  updateSprintTask: (taskId: number, payload: { isCompleted?: boolean; title?: string; description?: string }) => queries.updateSprintTask(taskId, payload),
   getSprintBacklog: (clientId: number) => queries.getSprintBacklog(clientId),
   updateSprintBacklogItem: (backlogId: number, payload: {
     status?: 'planned' | 'in_progress' | 'done';
     sprintId?: number | null;
+    clientId?: number;
+    title?: string;
+    dueDate?: string;
   }) => queries.updateSprintBacklogItem(backlogId, payload),
   getBacklogActivities: (clientId: number) => queries.getBacklogActivities(clientId),
   createSprintBacklogItem: (payload: {
