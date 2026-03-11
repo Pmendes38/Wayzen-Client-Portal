@@ -67,18 +67,18 @@ export default function Login() {
         </div>
       </section>
 
-      <section className="flex items-center justify-center p-4 md:p-8 bg-slate-50/70">
+      <section className="flex items-center justify-center p-4 md:p-8 bg-slate-50/70 dark:bg-slate-950">
         <div className="w-full max-w-md">
           <div className="text-center mb-6 lg:hidden">
             <div className="w-14 h-14 bg-wayzen-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-soft">
               <span className="text-white font-bold text-xl">W</span>
             </div>
-            <h1 className="text-2xl font-extrabold text-brand-midnight">Wayzen Client Portal</h1>
+            <h1 className="text-2xl font-extrabold text-brand-midnight dark:text-wayzen-200">Wayzen Client Portal</h1>
           </div>
 
-          <div className="card p-6 md:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-1">Entrar na sua conta</h2>
-            <p className="text-sm text-gray-500 mb-6">Acesse seu painel para acompanhar entregas e resultados.</p>
+          <div className="card p-6 md:p-8 bg-white dark:bg-slate-900 dark:border-slate-700">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">Entrar na sua conta</h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">Acesse seu painel para acompanhar entregas e resultados.</p>
 
             {error && (
               <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
@@ -86,14 +86,14 @@ export default function Login() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-field" placeholder="seu@email.com" required />
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Email</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" placeholder="seu@email.com" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Senha</label>
                 <div className="relative">
-                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="input-field pr-10" placeholder="••••••••" required />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} className="input-field pr-10 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" placeholder="••••••••" required />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-slate-400 dark:hover:text-slate-200">
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
@@ -104,8 +104,8 @@ export default function Login() {
               </button>
             </form>
 
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-xs text-gray-500 text-center">
+            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
+              <p className="text-xs text-gray-500 dark:text-slate-400 text-center">
                 A autenticação é feita exclusivamente pelo Supabase Auth.
               </p>
             </div>

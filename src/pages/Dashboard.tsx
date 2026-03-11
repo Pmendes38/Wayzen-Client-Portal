@@ -8,26 +8,15 @@ import { Bell, MessageSquareMore, TrendingUp } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from 'recharts';
 import InteractiveCalendar from '@/components/reports/InteractiveCalendar';
 import { buildSprintCalendarEvents, useProjectCalendar } from '@/hooks/useProjectCalendar';
-
-const monthSales = [
-  { name: 'Sem 1', value: 18000 },
-  { name: 'Sem 2', value: 22400 },
-  { name: 'Sem 3', value: 20800 },
-  { name: 'Sem 4', value: 25200 },
-];
-
-const daySales = [
-  { name: '09h', value: 6 },
-  { name: '11h', value: 9 },
-  { name: '13h', value: 5 },
-  { name: '15h', value: 12 },
-  { name: '17h', value: 8 },
-];
+import { portalService } from '@/lib/services/portal';
+import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { isInternal, activeClient, activeClientId, loadingClients } = usePortalScope();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [series, setSeries] = useState<{ monthSales: Array<{ name: string; value: number }>; daySales: Array<{ name: string; value: number }> }>({ monthSales: [], daySales: [] });
   const [loading, setLoading] = useState(true);
   const seedEvents = useMemo(() => buildSprintCalendarEvents(data?.activeSprints || []), [data?.activeSprints]);
   const { events, setEvents } = useProjectCalendar(activeClientId, seedEvents);
@@ -39,9 +28,13 @@ export default function Dashboard() {
       return;
     }
 
-    getDashboardData(activeClientId)
-      .then((res) => {
+    Promise.all([
+      getDashboardData(activeClientId),
+      portalService.getDashboardSalesSeries(activeClientId),
+    ])
+      .then(([res, salesSeries]) => {
         setData(res);
+        setSeries(salesSeries);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -86,9 +79,9 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <div className="bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 rounded-xl px-4 py-2.5 min-w-[280px] border border-slate-200 dark:border-slate-700">
             <p className="text-xs uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">Conversas</p>
-            <p className="text-sm font-semibold mt-0.5">{conversationHint}</p>
+            <button className="text-sm font-semibold mt-0.5 text-left hover:underline" onClick={() => navigate('/tickets')}>{conversationHint}</button>
           </div>
-          <button className="relative w-11 h-11 rounded-xl bg-slate-900 dark:bg-wayzen-700 text-white inline-flex items-center justify-center">
+          <button onClick={() => navigate('/notifications')} className="relative w-11 h-11 rounded-xl bg-slate-900 dark:bg-wayzen-700 text-white inline-flex items-center justify-center">
             <Bell size={18} />
             {unreadNotifications > 0 && (
               <span className="absolute -top-2 -right-2 text-[10px] font-bold bg-emerald-500 text-white rounded-full w-5 h-5 inline-flex items-center justify-center">
@@ -99,7 +92,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="card p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-slate-700">
+      <button onClick={() => navigate('/sprints')} className="card w-full text-left p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-slate-700 hover:opacity-95">
         <p className="text-xs uppercase tracking-[0.14em] text-slate-300">Resumo da conclusao das sprints</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -113,17 +106,17 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
+      </button>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <div className="card p-5">
+        <button onClick={() => navigate('/reports')} className="card p-5 text-left">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Grafico resumo de vendas no mes</h2>
             <span className="badge badge-green inline-flex items-center gap-1"><TrendingUp size={13} /> +12.3%</span>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthSales} margin={{ left: -16, right: 6, top: 6 }}>
+              <AreaChart data={series.monthSales} margin={{ left: -16, right: 6, top: 6 }}>
                 <defs>
                   <linearGradient id="monthFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#6366f1" stopOpacity={0.45} />
@@ -133,21 +126,21 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: number) => [`R$ ${v.toLocaleString('pt-BR')}`, 'Vendas']} />
+                <Tooltip formatter={(v: number) => [`${v.toLocaleString('pt-BR')} eventos`, 'Volume']} />
                 <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={2.5} fill="url(#monthFill)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </button>
 
-        <div className="card p-5">
+        <button onClick={() => navigate('/reports')} className="card p-5 text-left">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Grafico resumo de vendas no dia</h2>
             <span className="badge badge-blue inline-flex items-center gap-1"><MessageSquareMore size={13} /> Em tempo real</span>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={daySales} margin={{ left: -18, right: 8, top: 6 }}>
+              <BarChart data={series.daySales} margin={{ left: -18, right: 8, top: 6 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -156,7 +149,7 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </button>
       </div>
 
       <InteractiveCalendar initialEvents={events} onEventsChange={setEvents} />

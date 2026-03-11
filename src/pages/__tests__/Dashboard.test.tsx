@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import Dashboard from '@/pages/Dashboard';
+import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ user: { name: 'Administrador' } }),
@@ -29,9 +30,30 @@ vi.mock('@/lib/queries', () => ({
   }),
 }));
 
+vi.mock('@/lib/services/portal', () => ({
+  portalService: {
+    getDashboardSalesSeries: vi.fn().mockResolvedValue({
+      monthSales: [
+        { name: 'jan', value: 4 },
+        { name: 'fev', value: 6 },
+      ],
+      daySales: [
+        { name: '09h', value: 2 },
+        { name: '11h', value: 3 },
+      ],
+    }),
+    getProjectCalendarEvents: vi.fn().mockResolvedValue([]),
+    syncProjectCalendarEvents: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 describe('Dashboard operacional', () => {
   it('renderiza os blocos principais da nova estrutura', async () => {
-    render(<Dashboard />);
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/Olá, Administrador!/i)).toBeInTheDocument();

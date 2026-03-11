@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Ticket, FileText, FolderOpen,
-  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, CalendarDays
+  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, CalendarDays, KanbanSquare
 } from 'lucide-react';
 import { useState } from 'react';
 import ThemeToggle from './ThemeToggle';
@@ -22,7 +22,8 @@ export default function Sidebar() {
   const navItems = isInternal
     ? [
         { to: '/', icon: LayoutDashboard, label: 'Dashboard Operacional' },
-        { to: '/sprints', icon: BarChart3, label: 'Editor de Sprints' },
+        { to: '/kanban', icon: KanbanSquare, label: 'Kanban' },
+        { to: '/sprints', icon: BarChart3, label: 'Sprints' },
         { to: '/meetings', icon: CalendarDays, label: 'Agenda e Chamadas' },
         { to: '/tickets', icon: Ticket, label: 'Chat do Projeto' },
         { to: '/documents', icon: FolderOpen, label: 'Documentos' },
@@ -31,6 +32,7 @@ export default function Sidebar() {
       ]
     : [
         { to: '/', icon: LayoutDashboard, label: 'Meu Projeto' },
+        { to: '/kanban', icon: KanbanSquare, label: 'Kanban' },
         { to: '/sprints', icon: BarChart3, label: 'Cronograma' },
         { to: '/meetings', icon: CalendarDays, label: 'Agenda' },
         { to: '/tickets', icon: Ticket, label: 'Chat do Projeto' },

@@ -9,10 +9,10 @@ type ViewMode = 'kanban' | 'sprints';
 type KanbanColumn = 'backlog' | 'todo' | 'doing' | 'finished';
 
 const KANBAN_COLUMNS: Array<{ id: KanbanColumn; title: string; tone: string }> = [
-  { id: 'backlog', title: 'BACKLOG', tone: 'bg-blue-900/40 text-blue-200 border-blue-700/50' },
-  { id: 'todo', title: 'TO DO', tone: 'bg-slate-800/70 text-slate-200 border-slate-700/80' },
-  { id: 'doing', title: 'DOING', tone: 'bg-amber-900/25 text-amber-200 border-amber-700/40' },
-  { id: 'finished', title: 'FINISHED', tone: 'bg-emerald-900/30 text-emerald-200 border-emerald-700/40' },
+  { id: 'backlog', title: 'BACKLOG', tone: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700/50' },
+  { id: 'todo', title: 'TO DO', tone: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800/70 dark:text-slate-200 dark:border-slate-700/80' },
+  { id: 'doing', title: 'DOING', tone: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/25 dark:text-amber-200 dark:border-amber-700/40' },
+  { id: 'finished', title: 'FINISHED', tone: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/40' },
 ];
 
 export default function Sprints() {
@@ -193,17 +193,17 @@ export default function Sprints() {
 
       {(viewMode === 'kanban' && isInternal) && (
         <div className="space-y-5">
-          <div className="rounded-2xl border border-slate-800 bg-[#090d16] p-4 md:p-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 dark:border-slate-700 dark:bg-slate-900">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
               <input
-                className="input-field !bg-slate-900 !text-slate-100 !border-slate-700"
+                className="input-field dark:!bg-slate-800 dark:!text-slate-100 dark:!border-slate-700"
                 placeholder="Nova tarefa de backlog"
                 value={newBacklog.title}
                 onChange={(e) => setNewBacklog((prev) => ({ ...prev, title: e.target.value }))}
               />
               <input
                 type="date"
-                className="input-field !bg-slate-900 !text-slate-100 !border-slate-700"
+                className="input-field dark:!bg-slate-800 dark:!text-slate-100 dark:!border-slate-700"
                 value={newBacklog.dueDate}
                 onChange={(e) => setNewBacklog((prev) => ({ ...prev, dueDate: e.target.value }))}
               />
@@ -212,7 +212,7 @@ export default function Sprints() {
               </button>
             </div>
             <textarea
-              className="input-field mt-3 h-20 !bg-slate-900 !text-slate-100 !border-slate-700"
+              className="input-field mt-3 h-20 dark:!bg-slate-800 dark:!text-slate-100 dark:!border-slate-700"
               placeholder="Descricao da atividade"
               value={newBacklog.details}
               onChange={(e) => setNewBacklog((prev) => ({ ...prev, details: e.target.value }))}
@@ -223,7 +223,7 @@ export default function Sprints() {
             {KANBAN_COLUMNS.map((column) => (
               <div
                 key={column.id}
-                className="rounded-2xl border border-slate-800 bg-[#070b13] min-h-[520px]"
+                className="rounded-2xl border border-slate-200 bg-slate-50 min-h-[520px] dark:border-slate-700 dark:bg-slate-900"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={async () => {
                   if (!draggingId) return;
@@ -242,35 +242,35 @@ export default function Sprints() {
                       key={item.id}
                       draggable
                       onDragStart={() => setDraggingId(item.id)}
-                      className="rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-[0_8px_24px_rgba(0,0,0,0.25)]"
+                      className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-start gap-2">
                           <GripVertical size={14} className="text-slate-500 mt-1" />
-                          <p className="text-slate-100 font-semibold text-sm leading-5">{item.title}</p>
+                          <p className="text-slate-900 dark:text-slate-100 font-semibold text-sm leading-5">{item.title}</p>
                         </div>
                       </div>
 
-                      {item.details && <p className="text-xs text-slate-400 mt-2 line-clamp-3">{item.details}</p>}
+                      {item.details && <p className="text-xs text-slate-500 dark:text-slate-300 mt-2 line-clamp-3">{item.details}</p>}
 
                       <div className="mt-3 flex items-center justify-between">
-                        <div className="inline-flex items-center gap-2 text-xs text-slate-400">
+                        <div className="inline-flex items-center gap-2 text-xs text-slate-500 dark:text-slate-300">
                           <UserCircle2 size={15} />
                           <span>{item.created_by_name || 'Time Wayzen'}</span>
                         </div>
-                        <div className="text-xs text-slate-400">
+                        <div className="text-xs text-slate-500 dark:text-slate-300">
                           {item.due_date ? new Date(item.due_date).toLocaleDateString('pt-BR') : 'Sem prazo'}
                         </div>
                       </div>
 
                       <div className="mt-3 flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-md bg-slate-800 border border-slate-700 inline-flex items-center justify-center text-slate-300">
+                        <span className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 inline-flex items-center justify-center text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
                           <Circle size={13} />
                         </span>
-                        <span className="w-7 h-7 rounded-md bg-slate-800 border border-slate-700 inline-flex items-center justify-center text-slate-300">
+                        <span className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 inline-flex items-center justify-center text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
                           <CalendarDays size={13} />
                         </span>
-                        <span className="w-7 h-7 rounded-md bg-slate-800 border border-slate-700 inline-flex items-center justify-center text-slate-300">
+                        <span className="w-7 h-7 rounded-md bg-slate-100 border border-slate-200 inline-flex items-center justify-center text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-300">
                           <CheckCircle2 size={13} />
                         </span>
                       </div>
@@ -278,7 +278,7 @@ export default function Sprints() {
                   ))}
 
                   {!backlogColumns[column.id].length && (
-                    <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center text-slate-500 text-sm">
+                    <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
                       Arraste tarefas para esta coluna.
                     </div>
                   )}

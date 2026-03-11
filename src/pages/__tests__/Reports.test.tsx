@@ -47,6 +47,12 @@ vi.mock('@/lib/services/portal', () => ({
         created_at: new Date().toISOString(),
       },
     ]),
+    getAnalyticsData: vi.fn().mockResolvedValue({
+      marketing: [{ period: 'mar', leads: 12, costPerLead: 50, activeCampaigns: 2, conversionRate: 3.2 }],
+      sales: [{ period: 'mar', meetings: 4, proposals: 2, dealsClosed: 1, averageTicket: 1000 }],
+      correlation: [{ label: 'mar', leads: 12, deals: 1 }],
+      funnel: [{ stage: 'Leads', value: 12 }],
+    }),
     getChatContacts: vi.fn().mockResolvedValue([
       { id: 2, name: 'Carla', role: 'consultant' },
     ]),

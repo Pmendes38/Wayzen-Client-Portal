@@ -131,4 +131,36 @@ export const portalService = {
   getNotifications: () => queries.getNotifications(),
   markNotificationRead: (notificationId: number) => queries.markNotificationAsRead(notificationId),
   markAllNotificationsRead: () => queries.markAllNotificationsAsRead(),
+
+  getProjectContacts: (clientId: number) => queries.getProjectContacts(clientId),
+  createProjectContact: (payload: {
+    clientId: number;
+    name: string;
+    role: string;
+    email: string;
+    phone: string;
+    notes: string;
+  }) => queries.createProjectContact(payload),
+  updateProjectContact: (contactId: number, payload: {
+    name: string;
+    role: string;
+    email: string;
+    phone: string;
+    notes: string;
+  }) => queries.updateProjectContact(contactId, payload),
+  deleteProjectContact: (contactId: number) => queries.deleteProjectContact(contactId),
+
+  getProjectCalendarEvents: (clientId: number) => queries.getProjectCalendarEvents(clientId),
+  syncProjectCalendarEvents: (clientId: number, events: Array<{
+    id: number;
+    title: string;
+    start_at: string;
+    end_at: string;
+    type: string;
+    description?: string | null;
+    participant_ids?: number[];
+  }>) => queries.syncProjectCalendarEvents(clientId, events),
+
+  getAnalyticsData: (clientId: number) => queries.getAnalyticsData(clientId),
+  getDashboardSalesSeries: (clientId: number) => queries.getDashboardSalesSeries(clientId),
 };

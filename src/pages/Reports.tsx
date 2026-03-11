@@ -21,34 +21,6 @@ import AnalyticsDashboard from '@/components/reports/AnalyticsDashboard';
 
 type ReportTab = 'analytics' | 'daily_logs' | 'published_reports';
 
-const analyticsSeed: MarketingSalesAnalytics = {
-  marketing: [
-    { period: 'Jan', leads: 92, costPerLead: 72, activeCampaigns: 3, conversionRate: 4.2 },
-    { period: 'Fev', leads: 116, costPerLead: 67, activeCampaigns: 4, conversionRate: 4.8 },
-    { period: 'Mar', leads: 141, costPerLead: 61, activeCampaigns: 4, conversionRate: 5.1 },
-    { period: 'Abr', leads: 133, costPerLead: 64, activeCampaigns: 5, conversionRate: 4.9 },
-  ],
-  sales: [
-    { period: 'Jan', meetings: 24, proposals: 12, dealsClosed: 5, averageTicket: 9800 },
-    { period: 'Fev', meetings: 28, proposals: 14, dealsClosed: 7, averageTicket: 10300 },
-    { period: 'Mar', meetings: 33, proposals: 18, dealsClosed: 9, averageTicket: 11200 },
-    { period: 'Abr', meetings: 31, proposals: 16, dealsClosed: 8, averageTicket: 10800 },
-  ],
-  correlation: [
-    { label: 'Jan', leads: 92, deals: 5 },
-    { label: 'Fev', leads: 116, deals: 7 },
-    { label: 'Mar', leads: 141, deals: 9 },
-    { label: 'Abr', leads: 133, deals: 8 },
-  ],
-  funnel: [
-    { stage: 'Visitantes', value: 4200 },
-    { stage: 'Leads', value: 482 },
-    { stage: 'MQL', value: 214 },
-    { stage: 'Propostas', value: 60 },
-    { stage: 'Negocios', value: 29 },
-  ],
-};
-
 const tabClasses = (active: boolean) =>
   `inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold border transition-colors ${
     active
@@ -61,6 +33,12 @@ export default function Reports() {
   const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
   const [reports, setReports] = useState<SharedReport[]>([]);
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
+  const [analyticsData, setAnalyticsData] = useState<MarketingSalesAnalytics>({
+    marketing: [],
+    sales: [],
+    correlation: [],
+    funnel: [],
+  });
   const [activeTab, setActiveTab] = useState<ReportTab>('analytics');
   const [expanded, setExpanded] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -91,10 +69,12 @@ export default function Reports() {
     Promise.all([
       portalService.getReports(activeClientId),
       portalService.getDailyLogs(activeClientId),
+      portalService.getAnalyticsData(activeClientId),
     ])
-      .then(([reportData, logData]) => {
+      .then(([reportData, logData, analytics]) => {
         setReports(reportData);
         setDailyLogs(logData);
+        setAnalyticsData(analytics as MarketingSalesAnalytics);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -177,7 +157,7 @@ export default function Reports() {
         </button>
       </div>
 
-      {activeTab === 'analytics' && <AnalyticsDashboard data={analyticsSeed} />}
+      {activeTab === 'analytics' && <AnalyticsDashboard data={analyticsData} />}
 
       {activeTab === 'daily_logs' && (
         <section className="space-y-4">

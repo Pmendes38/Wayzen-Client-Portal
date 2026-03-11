@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import Meetings from '@/pages/Meetings';
 
+const contactsStore: any[] = [];
+
 vi.mock('@/hooks/usePortalScope', () => ({
   usePortalScope: () => ({
     isInternal: true,
@@ -28,12 +30,23 @@ vi.mock('@/lib/services/portal', () => ({
     ]),
     getChatContacts: vi.fn().mockResolvedValue([{ id: 9, name: 'Carla', role: 'consultant' }]),
     createMeetingEvent: vi.fn().mockResolvedValue({ success: true }),
+    getProjectContacts: vi.fn().mockImplementation(async () => contactsStore),
+    createProjectContact: vi.fn().mockImplementation(async (payload: any) => {
+      const created = { id: Date.now(), client_id: payload.clientId, created_at: new Date().toISOString(), ...payload };
+      contactsStore.unshift(created);
+      return created;
+    }),
+    updateProjectContact: vi.fn().mockImplementation(async (id: number, payload: any) => ({ id, client_id: 1, created_at: new Date().toISOString(), ...payload })),
+    deleteProjectContact: vi.fn().mockResolvedValue(undefined),
+    getProjectCalendarEvents: vi.fn().mockResolvedValue([]),
+    syncProjectCalendarEvents: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
 describe('Agenda e contatos do projeto', () => {
   it('renderiza calendario e permite criar um contato vinculado ao projeto', async () => {
     window.localStorage.clear();
+    contactsStore.length = 0;
     render(<Meetings />);
 
     await waitFor(() => {

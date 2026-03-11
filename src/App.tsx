@@ -6,6 +6,7 @@ import Login from '@/pages/Login';
 import PortalSelect from '@/pages/PortalSelect';
 import Dashboard from '@/pages/Dashboard';
 import Sprints from '@/pages/Sprints';
+import Kanban from '@/pages/Kanban';
 import Tickets from '@/pages/Tickets';
 import Documents from '@/pages/Documents';
 import Reports from '@/pages/Reports';
@@ -55,6 +56,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<PortalGuard><Dashboard /></PortalGuard>} />
         <Route path="/sprints" element={<PortalGuard><Sprints /></PortalGuard>} />
+        <Route path="/kanban" element={<PortalGuard><Kanban /></PortalGuard>} />
         <Route path="/tickets" element={<PortalGuard><Tickets /></PortalGuard>} />
         <Route path="/documents" element={<PortalGuard><Documents /></PortalGuard>} />
         <Route path="/reports" element={<PortalGuard><Reports /></PortalGuard>} />

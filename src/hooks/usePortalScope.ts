@@ -27,6 +27,16 @@ export function usePortalScope() {
 
   const isInternal = user?.role === 'admin' || user?.role === 'consultant';
 
+  const refreshClients = async () => {
+    if (!isInternal || !user) return;
+    const normalized = ((await getClients()) || []) as Client[];
+    setClients(normalized);
+    if (!activeClientId || !normalized.some((client) => client.id === activeClientId)) {
+      setActiveClientIdState(null);
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  };
+
   useEffect(() => {
     if (!user) {
       setLoadingClients(false);
@@ -90,5 +100,6 @@ export function usePortalScope() {
     activeClientId,
     loadingClients,
     setActiveClientId,
+    refreshClients,
   };
 }

@@ -927,3 +927,321 @@ export async function getDashboardData(clientId: number) {
     sprintProgress: { completed, total },
   };
 }
+
+export async function getProjectContacts(clientId: number) {
+  const { data, error } = await supabase
+    .from('project_contacts')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createProjectContact(payload: {
+  clientId: number;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  notes: string;
+}) {
+  const { data, error } = await supabase
+    .from('project_contacts')
+    .insert({
+      client_id: payload.clientId,
+      name: payload.name,
+      role: payload.role,
+      email: payload.email,
+      phone: payload.phone,
+      notes: payload.notes,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProjectContact(contactId: number, payload: {
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  notes: string;
+}) {
+  const { data, error } = await supabase
+    .from('project_contacts')
+    .update({
+      name: payload.name,
+      role: payload.role,
+      email: payload.email,
+      phone: payload.phone,
+      notes: payload.notes,
+    })
+    .eq('id', contactId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteProjectContact(contactId: number) {
+  const { error } = await supabase
+    .from('project_contacts')
+    .delete()
+    .eq('id', contactId);
+
+  if (error) throw error;
+}
+
+export async function getProjectCalendarEvents(clientId: number) {
+  const { data, error } = await supabase
+    .from('project_calendar_events')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('start_at', { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function syncProjectCalendarEvents(clientId: number, events: Array<{
+  id: number;
+  title: string;
+  start_at: string;
+  end_at: string;
+  type: string;
+  description?: string | null;
+  participant_ids?: number[];
+}>) {
+  const { data: existingRows, error: existingError } = await supabase
+    .from('project_calendar_events')
+    .select('id')
+    .eq('client_id', clientId);
+
+  if (existingError) throw existingError;
+
+  const existingIds = new Set((existingRows || []).map((row: any) => Number(row.id)));
+  const incomingIds = new Set(events.map((event) => Number(event.id)));
+
+  const toDelete = Array.from(existingIds).filter((id) => !incomingIds.has(id));
+  if (toDelete.length) {
+    const { error } = await supabase
+      .from('project_calendar_events')
+      .delete()
+      .eq('client_id', clientId)
+      .in('id', toDelete);
+    if (error) throw error;
+  }
+
+  if (!events.length) return;
+
+  const payload = events.map((event) => ({
+    id: event.id,
+    client_id: clientId,
+    title: event.title,
+    start_at: event.start_at,
+    end_at: event.end_at,
+    type: event.type,
+    description: event.description || null,
+    participant_ids: event.participant_ids || [],
+  }));
+
+  const { error: upsertError } = await supabase
+    .from('project_calendar_events')
+    .upsert(payload, { onConflict: 'id' });
+
+  if (upsertError) throw upsertError;
+}
+
+export async function getAnalyticsData(clientId: number) {
+  const [reports, dailyLogs, meetings, tickets] = await Promise.all([
+    supabase
+      .from('shared_reports')
+      .select('period_end, metrics')
+      .eq('client_id', clientId)
+      .order('period_end', { ascending: true }),
+    supabase
+      .from('daily_logs')
+      .select('log_date, progress_score, hours_worked')
+      .eq('client_id', clientId)
+      .order('log_date', { ascending: true }),
+    supabase
+      .from('meeting_events')
+      .select('meeting_date, meeting_type')
+      .eq('client_id', clientId)
+      .order('meeting_date', { ascending: true }),
+    supabase
+      .from('tickets')
+      .select('created_at, status')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: true }),
+  ]);
+
+  if (reports.error) throw reports.error;
+  if (dailyLogs.error) throw dailyLogs.error;
+  if (meetings.error) throw meetings.error;
+  if (tickets.error) throw tickets.error;
+
+  const monthly: Record<string, any> = {};
+  const ensureMonth = (key: string) => {
+    if (!monthly[key]) {
+      monthly[key] = {
+        period: key,
+        leads: 0,
+        costPerLead: 0,
+        activeCampaigns: 0,
+        conversionRate: 0,
+        meetings: 0,
+        proposals: 0,
+        dealsClosed: 0,
+        averageTicket: 0,
+      };
+    }
+    return monthly[key];
+  };
+
+  (reports.data || []).forEach((row: any) => {
+    const date = row.period_end ? new Date(row.period_end) : null;
+    const key = date && !Number.isNaN(date.getTime())
+      ? date.toLocaleDateString('pt-BR', { month: 'short' })
+      : 'N/A';
+    const bucket = ensureMonth(key);
+    const metrics = (row.metrics || {}) as Record<string, number>;
+    bucket.leads += Number(metrics.leads || 0);
+    bucket.costPerLead += Number(metrics.costPerLead || metrics.cpl || 0);
+    bucket.activeCampaigns += Number(metrics.activeCampaigns || metrics.campaigns || 0);
+    bucket.conversionRate += Number(metrics.conversionRate || 0);
+    bucket.proposals += Number(metrics.proposals || 0);
+    bucket.dealsClosed += Number(metrics.dealsClosed || metrics.deals || 0);
+    bucket.averageTicket += Number(metrics.averageTicket || 0);
+  });
+
+  (meetings.data || []).forEach((row: any) => {
+    const date = row.meeting_date ? new Date(row.meeting_date) : null;
+    if (!date || Number.isNaN(date.getTime())) return;
+    const key = date.toLocaleDateString('pt-BR', { month: 'short' });
+    const bucket = ensureMonth(key);
+    bucket.meetings += 1;
+  });
+
+  (tickets.data || []).forEach((row: any) => {
+    const date = row.created_at ? new Date(row.created_at) : null;
+    if (!date || Number.isNaN(date.getTime())) return;
+    const key = date.toLocaleDateString('pt-BR', { month: 'short' });
+    const bucket = ensureMonth(key);
+    if (row.status === 'resolved' || row.status === 'closed') {
+      bucket.dealsClosed += 1;
+    }
+    bucket.leads += 1;
+  });
+
+  const marketing = Object.values(monthly).map((item: any) => ({
+    period: item.period,
+    leads: item.leads,
+    costPerLead: item.costPerLead,
+    activeCampaigns: item.activeCampaigns,
+    conversionRate: Number(item.conversionRate.toFixed(2)),
+  }));
+
+  const sales = Object.values(monthly).map((item: any) => ({
+    period: item.period,
+    meetings: item.meetings,
+    proposals: item.proposals,
+    dealsClosed: item.dealsClosed,
+    averageTicket: item.averageTicket,
+  }));
+
+  const correlation = Object.values(monthly).map((item: any) => ({
+    label: item.period,
+    leads: item.leads,
+    deals: item.dealsClosed,
+  }));
+
+  const funnel = (() => {
+    const totalLeads = marketing.reduce((acc, row) => acc + row.leads, 0);
+    const totalMeetings = sales.reduce((acc, row) => acc + row.meetings, 0);
+    const totalProposals = sales.reduce((acc, row) => acc + row.proposals, 0);
+    const totalDeals = sales.reduce((acc, row) => acc + row.dealsClosed, 0);
+    const avgProgress = (dailyLogs.data || []).length
+      ? (dailyLogs.data || []).reduce((acc: number, row: any) => acc + Number(row.progress_score || 0), 0) / (dailyLogs.data || []).length
+      : 0;
+
+    return [
+      { stage: 'Leads', value: Math.round(totalLeads) },
+      { stage: 'Reunioes', value: Math.round(totalMeetings) },
+      { stage: 'Propostas', value: Math.round(totalProposals) },
+      { stage: 'Negocios', value: Math.round(totalDeals) },
+      { stage: 'Saude do Projeto', value: Math.round(avgProgress) },
+    ];
+  })();
+
+  return {
+    marketing,
+    sales,
+    correlation,
+    funnel,
+  };
+}
+
+export async function getDashboardSalesSeries(clientId: number) {
+  const [sprints, tickets, meetings] = await Promise.all([
+    supabase
+      .from('sprints')
+      .select('start_date, end_date')
+      .eq('client_id', clientId)
+      .order('start_date', { ascending: true }),
+    supabase
+      .from('tickets')
+      .select('created_at, status')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('meeting_events')
+      .select('meeting_date')
+      .eq('client_id', clientId)
+      .order('meeting_date', { ascending: true }),
+  ]);
+
+  if (sprints.error) throw sprints.error;
+  if (tickets.error) throw tickets.error;
+  if (meetings.error) throw meetings.error;
+
+  const monthMap: Record<string, number> = {};
+  (tickets.data || []).forEach((ticket: any) => {
+    const d = new Date(ticket.created_at);
+    if (Number.isNaN(d.getTime())) return;
+    const label = d.toLocaleDateString('pt-BR', { month: 'short' });
+    monthMap[label] = (monthMap[label] || 0) + 1;
+  });
+  (sprints.data || []).forEach((sprint: any) => {
+    const ref = sprint.end_date || sprint.start_date;
+    if (!ref) return;
+    const d = new Date(ref);
+    if (Number.isNaN(d.getTime())) return;
+    const label = d.toLocaleDateString('pt-BR', { month: 'short' });
+    monthMap[label] = (monthMap[label] || 0) + 1;
+  });
+
+  const monthSales = Object.entries(monthMap).map(([name, value]) => ({ name, value }));
+
+  const hourMap: Record<string, number> = {};
+  (meetings.data || []).forEach((meeting: any) => {
+    const d = new Date(meeting.meeting_date);
+    if (Number.isNaN(d.getTime())) return;
+    const hour = `${String(d.getHours()).padStart(2, '0')}h`;
+    hourMap[hour] = (hourMap[hour] || 0) + 1;
+  });
+
+  const daySales = Object.entries(hourMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => ({ name, value }));
+
+  return {
+    monthSales,
+    daySales,
+  };
+}

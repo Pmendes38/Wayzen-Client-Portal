@@ -1,36 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ProjectCalendarEvent, Sprint } from '@/types/domain';
-
-const STORAGE_PREFIX = 'wayzen-calendar';
-
-function storageKey(clientId: number) {
-  return `${STORAGE_PREFIX}:${clientId}`;
-}
-
-function readCalendar(clientId: number): ProjectCalendarEvent[] {
-  if (typeof window === 'undefined') {
-    return [];
-  }
-
-  const raw = window.localStorage.getItem(storageKey(clientId));
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as ProjectCalendarEvent[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeCalendar(clientId: number, events: ProjectCalendarEvent[]) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  window.localStorage.setItem(storageKey(clientId), JSON.stringify(events));
-}
+import { portalService } from '@/lib/services/portal';
 
 function mergeEvents(base: ProjectCalendarEvent[], incoming: ProjectCalendarEvent[]) {
   const map = new Map<number, ProjectCalendarEvent>();
@@ -61,35 +31,36 @@ export function buildSprintCalendarEvents(sprints: Sprint[]): ProjectCalendarEve
 
 export function useProjectCalendar(clientId?: number | null, seedEvents: ProjectCalendarEvent[] = []) {
   const [events, setEvents] = useState<ProjectCalendarEvent[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const resolvedSeed = useMemo(() => seedEvents, [seedEvents]);
+  const seedIds = useMemo(() => new Set(resolvedSeed.map((event) => event.id)), [resolvedSeed]);
 
   useEffect(() => {
     if (!clientId) {
       setEvents([]);
+      setLoading(false);
       return;
     }
 
-    const stored = readCalendar(clientId);
-    if (stored.length) {
-      const merged = mergeEvents(stored, resolvedSeed);
-      setEvents(merged);
-      writeCalendar(clientId, merged);
-      return;
-    }
-
-    setEvents(resolvedSeed);
-    if (resolvedSeed.length) {
-      writeCalendar(clientId, resolvedSeed);
-    }
+    setLoading(true);
+    portalService
+      .getProjectCalendarEvents(clientId)
+      .then((dbEvents) => {
+        const merged = mergeEvents(dbEvents as ProjectCalendarEvent[], resolvedSeed);
+        setEvents(merged);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [clientId, resolvedSeed]);
 
   const updateEvents = (nextEvents: ProjectCalendarEvent[]) => {
     setEvents(nextEvents);
     if (clientId) {
-      writeCalendar(clientId, nextEvents);
+      const manualEvents = nextEvents.filter((event) => !seedIds.has(event.id));
+      portalService.syncProjectCalendarEvents(clientId, manualEvents).catch(console.error);
     }
   };
 
-  return { events, setEvents: updateEvents };
+  return { events, setEvents: updateEvents, loading };
 }
