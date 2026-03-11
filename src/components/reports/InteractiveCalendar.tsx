@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   addDays,
   addMonths,
@@ -40,8 +40,10 @@ type InteractiveCalendarProps = {
 };
 
 const weekdayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+const EMPTY_EVENTS: ProjectCalendarEvent[] = [];
+const EMPTY_CONTACTS: ContactUser[] = [];
 
-export default function InteractiveCalendar({ initialEvents = [], contacts = [], onEventsChange }: InteractiveCalendarProps) {
+export default function InteractiveCalendar({ initialEvents = EMPTY_EVENTS, contacts = EMPTY_CONTACTS, onEventsChange }: InteractiveCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [events, setEvents] = useState<ProjectCalendarEvent[]>(initialEvents);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -59,6 +61,10 @@ export default function InteractiveCalendar({ initialEvents = [], contacts = [],
     () => format(currentMonth, "MMMM 'de' yyyy", { locale: ptBR }),
     [currentMonth]
   );
+
+  useEffect(() => {
+    setEvents(initialEvents);
+  }, [initialEvents]);
 
   const days = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);

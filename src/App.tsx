@@ -14,6 +14,7 @@ import ClientPortals from '@/pages/ClientPortals';
 import DailyLogs from '@/pages/DailyLogs';
 import Meetings from '@/pages/Meetings';
 import PageLoader from '@/components/PageLoader';
+import { ThemeProvider } from '@/hooks/useTheme';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -69,8 +70,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

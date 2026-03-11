@@ -4,16 +4,13 @@ import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
 import {
-  ContactUser,
   DailyLog,
   MarketingSalesAnalytics,
-  ProjectCalendarEvent,
   SharedReport,
 } from '@/types/domain';
 import {
   BarChart3,
   Calendar,
-  CalendarDays,
   ChevronDown,
   ChevronRight,
   FileText,
@@ -21,9 +18,8 @@ import {
   ScrollText,
 } from 'lucide-react';
 import AnalyticsDashboard from '@/components/reports/AnalyticsDashboard';
-import InteractiveCalendar from '@/components/reports/InteractiveCalendar';
 
-type ReportTab = 'analytics' | 'daily_logs' | 'published_reports' | 'calendar';
+type ReportTab = 'analytics' | 'daily_logs' | 'published_reports';
 
 const analyticsSeed: MarketingSalesAnalytics = {
   marketing: [
@@ -61,12 +57,10 @@ const tabClasses = (active: boolean) =>
   }`;
 
 export default function Reports() {
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
   const [reports, setReports] = useState<SharedReport[]>([]);
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
-  const [contacts, setContacts] = useState<ContactUser[]>([]);
-  const [calendarEvents, setCalendarEvents] = useState<ProjectCalendarEvent[]>([]);
   const [activeTab, setActiveTab] = useState<ReportTab>('analytics');
   const [expanded, setExpanded] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -97,12 +91,10 @@ export default function Reports() {
     Promise.all([
       portalService.getReports(activeClientId),
       portalService.getDailyLogs(activeClientId),
-      portalService.getChatContacts(activeClientId),
     ])
-      .then(([reportData, logData, contactData]) => {
+      .then(([reportData, logData]) => {
         setReports(reportData);
         setDailyLogs(logData);
-        setContacts(contactData);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -119,36 +111,6 @@ export default function Reports() {
       })),
     [dailyLogs]
   );
-
-  const reportCalendarSeed = useMemo(() => {
-    const fromReports: ProjectCalendarEvent[] = reports.slice(0, 6).map((report) => ({
-      id: report.id * 1000,
-      title: report.title,
-      start_at: `${report.period_start}T09:00:00.000Z`,
-      end_at: `${report.period_end}T17:00:00.000Z`,
-      type: 'sprint_delivery',
-      description: report.content || 'Publicacao de relatorio.',
-      participant_ids: [],
-    }));
-
-    const fromLogs: ProjectCalendarEvent[] = dailyLogs.slice(0, 4).map((log) => ({
-      id: log.id * 2000,
-      title: `Registro diario (${log.progress_score}%)`,
-      start_at: `${log.log_date}T18:00:00.000Z`,
-      end_at: `${log.log_date}T18:30:00.000Z`,
-      type: 'general',
-      description: log.summary,
-      participant_ids: [],
-    }));
-
-    return [...fromReports, ...fromLogs];
-  }, [dailyLogs, reports]);
-
-  useEffect(() => {
-    if (!calendarEvents.length) {
-      setCalendarEvents(reportCalendarSeed);
-    }
-  }, [calendarEvents.length, reportCalendarSeed]);
 
   const createReport = async () => {
     if (!isInternal || !clientId || !form.title || !form.periodStart || !form.periodEnd) return;
@@ -213,20 +175,9 @@ export default function Reports() {
         <button className={tabClasses(activeTab === 'published_reports')} onClick={() => setActiveTab('published_reports')}>
           <FileText size={15} /> Relatorios Publicados
         </button>
-        <button className={tabClasses(activeTab === 'calendar')} onClick={() => setActiveTab('calendar')}>
-          <CalendarDays size={15} /> Calendario Interativo
-        </button>
       </div>
 
       {activeTab === 'analytics' && <AnalyticsDashboard data={analyticsSeed} />}
-
-      {activeTab === 'calendar' && (
-        <InteractiveCalendar
-          initialEvents={calendarEvents}
-          contacts={contacts}
-          onEventsChange={setCalendarEvents}
-        />
-      )}
 
       {activeTab === 'daily_logs' && (
         <section className="space-y-4">

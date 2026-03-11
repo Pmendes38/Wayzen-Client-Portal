@@ -158,16 +158,16 @@ export default function Sprints() {
   if (loading || loadingClients) return <PageLoader />;
 
   if (!clientId) {
-    return <div className="card p-8 text-center text-gray-500">Selecione um portal para acompanhar as sprints.</div>;
+    return <div className="card p-8 text-center text-gray-500 dark:text-slate-400">Selecione um portal para acompanhar as sprints.</div>;
   }
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
           {isInternal ? 'Gestao de Backlog e Sprints' : 'Cronograma de Sprints'}
         </h1>
-        <p className="text-gray-500 mt-1">
+        <p className="text-gray-500 dark:text-slate-400 mt-1">
           {isInternal
             ? `Backlog no estilo kanban para ${activeClient?.company_name || ''}`
             : 'Visao macro do cronograma e evolucao do projeto'}
@@ -293,7 +293,7 @@ export default function Sprints() {
         <div className="space-y-4">
           {isInternal && (
             <div className="card p-4 mb-2">
-              <h2 className="font-semibold text-gray-900 mb-3">Nova Sprint</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Nova Sprint</h2>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <input
                   value={newSprint.name}
@@ -343,28 +343,28 @@ export default function Sprints() {
             return (
               <div key={sprint.id} className="card overflow-hidden">
                 <button
-                  className="w-full p-5 text-left flex items-center justify-between hover:bg-gray-50"
+                  className="w-full p-5 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800"
                   onClick={() => toggleSprint(sprint.id)}
                 >
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900">{sprint.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">{sprint.name}</h3>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                       {sprint.start_date ? new Date(sprint.start_date).toLocaleDateString('pt-BR') : '-'} ate{' '}
                       {sprint.end_date ? new Date(sprint.end_date).toLocaleDateString('pt-BR') : '-'}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-wayzen-700">{progress}%</span>
+                  <span className="text-sm font-semibold text-wayzen-700 dark:text-wayzen-300">{progress}%</span>
                 </button>
 
                 {expanded[sprint.id] && (
-                  <div className="border-t border-gray-200 p-5 bg-gray-50">
+                  <div className="border-t border-gray-200 dark:border-slate-700 p-5 bg-gray-50 dark:bg-slate-800">
                     {!sprintTasks.length ? (
-                      <p className="text-sm text-gray-400">Nenhuma atividade carregada para esta sprint.</p>
+                      <p className="text-sm text-gray-400 dark:text-slate-500">Nenhuma atividade carregada para esta sprint.</p>
                     ) : (
                       <div className="space-y-2">
                         {sprintTasks.map((task) => (
-                          <div key={task.id} className="rounded-lg bg-white border border-gray-200 p-3">
-                            <p className={`text-sm ${task.is_completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>{task.title}</p>
+                          <div key={task.id} className="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3">
+                            <p className={`text-sm ${task.is_completed ? 'line-through text-gray-400 dark:text-slate-500' : 'text-gray-800 dark:text-slate-200'}`}>{task.title}</p>
                           </div>
                         ))}
                       </div>
@@ -376,7 +376,7 @@ export default function Sprints() {
           })}
 
           {!sprints.length && (
-            <div className="card p-10 text-center text-gray-400">Nenhuma sprint encontrada para este cliente.</div>
+            <div className="card p-10 text-center text-gray-400 dark:text-slate-500">Nenhuma sprint encontrada para este cliente.</div>
           )}
         </div>
       )}

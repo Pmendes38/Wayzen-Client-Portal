@@ -40,6 +40,6 @@ describe('Dashboard operacional', () => {
     expect(screen.getByText(/Resumo da conclusao das sprints/i)).toBeInTheDocument();
     expect(screen.getByText(/Grafico resumo de vendas no mes/i)).toBeInTheDocument();
     expect(screen.getByText(/Grafico resumo de vendas no dia/i)).toBeInTheDocument();
-    expect(screen.getByText(/Calendario de marcos, reunioes e compromissos/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Calendario Interativo/i })).toBeInTheDocument();
   });
 });

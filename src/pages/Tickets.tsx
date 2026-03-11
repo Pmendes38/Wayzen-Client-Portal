@@ -95,14 +95,14 @@ export default function Tickets() {
   if (loading) return <PageLoader />;
 
   if (!activeClientId) {
-    return <div className="card p-8 text-center text-gray-500">Selecione um portal para usar o chat.</div>;
+    return <div className="card p-8 text-center text-gray-500 dark:text-slate-400">Selecione um portal para usar o chat.</div>;
   }
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Chat do Projeto</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Chat do Projeto</h1>
+        <p className="text-gray-500 dark:text-slate-400 mt-1">
           Conversa em grupo geral, grupo interno e chat direto por contato.
         </p>
       </div>
@@ -110,16 +110,16 @@ export default function Tickets() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-4">
           <div className="card p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 mb-2">Grupos</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400 mb-2">Grupos</p>
             <div className="space-y-2">
               {groupedRooms.groups.map((room) => (
                 <button
                   key={room.id}
                   onClick={() => loadMessages(room)}
-                  className={`w-full p-3 rounded-xl text-left border transition-colors ${selectedRoom?.id === room.id ? 'border-wayzen-500 bg-wayzen-50/60' : 'border-gray-200 hover:border-wayzen-300'}`}
+                  className={`w-full p-3 rounded-xl text-left border transition-colors ${selectedRoom?.id === room.id ? 'border-wayzen-500 bg-wayzen-50/60 dark:bg-wayzen-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-wayzen-300'}`}
                 >
-                  <p className="text-sm font-semibold text-gray-900">{roomLabel(room)}</p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{roomLabel(room)}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                     {room.room_type === 'internal' ? 'Apenas equipe interna' : 'Time Wayzen e cliente'}
                   </p>
                 </button>
@@ -128,36 +128,36 @@ export default function Tickets() {
           </div>
 
           <div className="card p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 mb-2">Contatos</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400 mb-2">Contatos</p>
             <div className="space-y-2 max-h-64 overflow-auto">
               {contacts.map((contact) => (
                 <button
                   key={contact.id}
                   onClick={() => openDirectChat(contact)}
-                  className="w-full p-3 rounded-xl text-left border border-gray-200 hover:border-wayzen-300 transition-colors"
+                  className="w-full p-3 rounded-xl text-left border border-gray-200 dark:border-slate-700 hover:border-wayzen-300 transition-colors"
                 >
-                  <p className="text-sm font-semibold text-gray-900">{contact.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{contact.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                     {contact.role === 'client' ? 'Cliente' : contact.role === 'admin' ? 'Admin' : 'Consultor'}
                   </p>
                 </button>
               ))}
-              {!contacts.length && <p className="text-sm text-gray-400">Nenhum contato disponível.</p>}
+              {!contacts.length && <p className="text-sm text-gray-400 dark:text-slate-500">Nenhum contato disponível.</p>}
             </div>
           </div>
 
           {groupedRooms.directs.length > 0 && (
             <div className="card p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 mb-2">Conversas Diretas</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400 mb-2">Conversas Diretas</p>
               <div className="space-y-2">
                 {groupedRooms.directs.map((room) => (
                   <button
                     key={room.id}
                     onClick={() => loadMessages(room)}
-                    className={`w-full p-3 rounded-xl text-left border transition-colors ${selectedRoom?.id === room.id ? 'border-wayzen-500 bg-wayzen-50/60' : 'border-gray-200 hover:border-wayzen-300'}`}
+                    className={`w-full p-3 rounded-xl text-left border transition-colors ${selectedRoom?.id === room.id ? 'border-wayzen-500 bg-wayzen-50/60 dark:bg-wayzen-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-wayzen-300'}`}
                   >
-                    <p className="text-sm font-semibold text-gray-900">{roomLabel(room)}</p>
-                    <p className="text-xs text-gray-500 mt-1">Conversa privada</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{roomLabel(room)}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Conversa privada</p>
                   </button>
                 ))}
               </div>
@@ -168,10 +168,10 @@ export default function Tickets() {
         <div className="lg:col-span-2">
           {selectedRoom ? (
             <div className="card flex flex-col h-[640px]">
-              <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+              <div className="p-5 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">{roomLabel(selectedRoom)}</h2>
-                  <p className="text-sm text-gray-500">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">{roomLabel(selectedRoom)}</h2>
+                  <p className="text-sm text-gray-500 dark:text-slate-400">
                     {selectedRoom.room_type === 'internal'
                       ? 'Canal interno invisivel para o cliente.'
                       : selectedRoom.room_type === 'general'
@@ -187,8 +187,8 @@ export default function Tickets() {
               <div className="flex-1 overflow-auto p-5 space-y-3">
                 {messages.map((msg) => (
                   <div key={msg.id} className={`flex ${msg.user_id === user?.id ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] rounded-xl px-4 py-3 ${msg.user_id === user?.id ? 'bg-wayzen-500 text-white' : 'bg-gray-100'}`}>
-                      <p className={`text-xs font-medium mb-1 ${msg.user_id === user?.id ? 'text-wayzen-100' : 'text-gray-500'}`}>
+                    <div className={`max-w-[80%] rounded-xl px-4 py-3 ${msg.user_id === user?.id ? 'bg-wayzen-500 text-white' : 'bg-gray-100 dark:bg-slate-800 dark:text-slate-100'}`}>
+                      <p className={`text-xs font-medium mb-1 ${msg.user_id === user?.id ? 'text-wayzen-100' : 'text-gray-500 dark:text-slate-400'}`}>
                         {msg.author_name} • {msg.author_role === 'client' ? 'Cliente' : msg.author_role === 'admin' ? 'Admin' : 'Consultor'}
                       </p>
                       <p className="text-sm">{msg.message}</p>
@@ -196,13 +196,13 @@ export default function Tickets() {
                   </div>
                 ))}
                 {!messages.length && (
-                  <div className="h-full flex items-center justify-center text-sm text-gray-400">
+                  <div className="h-full flex items-center justify-center text-sm text-gray-400 dark:text-slate-500">
                     Nenhuma mensagem ainda neste canal.
                   </div>
                 )}
               </div>
 
-              <div className="p-4 border-t border-gray-200">
+              <div className="p-4 border-t border-gray-200 dark:border-slate-700">
                 <div className="flex gap-2">
                   <input
                     value={newMessage}
@@ -218,7 +218,7 @@ export default function Tickets() {
               </div>
             </div>
           ) : (
-            <div className="card p-12 text-center text-gray-400 h-[640px] flex items-center justify-center">
+            <div className="card p-12 text-center text-gray-400 dark:text-slate-500 h-[640px] flex items-center justify-center">
               Selecione um grupo, contato ou conversa direta.
             </div>
           )}

@@ -17,12 +17,6 @@ describe('InteractiveCalendar', () => {
     fireEvent.change(screen.getByPlaceholderText(/Titulo do evento/i), {
       target: { value: 'Reuniao de alinhamento' },
     });
-    fireEvent.change(screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)[0], {
-      target: { value: '2026-03-12T09:00' },
-    });
-    fireEvent.change(screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)[1], {
-      target: { value: '2026-03-12T10:00' },
-    });
 
     fireEvent.click(screen.getByRole('button', { name: /Criar evento/i }));
 

@@ -56,7 +56,7 @@ vi.mock('@/lib/services/portal', () => ({
 }));
 
 describe('Reports hub', () => {
-  it('renderiza abas internas e alterna para o calendario', async () => {
+  it('renderiza abas internas de analytics, registro diario e relatorios publicados', async () => {
     render(<Reports />);
 
     await waitFor(() => {
@@ -67,8 +67,7 @@ describe('Reports hub', () => {
     expect(screen.getByRole('button', { name: /Registro Diario/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Relatorios Publicados/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Calendario Interativo/i }));
-
-    expect(screen.getByRole('heading', { name: /Calendario Interativo/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Registro Diario/i }));
+    expect(screen.getByText(/Historico de Operacao/i)).toBeInTheDocument();
   });
 });

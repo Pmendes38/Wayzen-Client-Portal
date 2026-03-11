@@ -173,6 +173,17 @@ export interface ContactUser {
   role: UserRole;
 }
 
+export interface ProjectContact {
+  id: number;
+  client_id: number;
+  name: string;
+  role: string;
+  email: string;
+  phone: string;
+  notes: string;
+  created_at: string;
+}
+
 export type CalendarEventType = 'sprint_delivery' | 'meeting' | 'transcript' | 'general';
 
 export interface ProjectCalendarEvent {

@@ -56,15 +56,15 @@ export default function Documents() {
   if (loading || loadingClients) return <PageLoader />;
 
   if (!clientId) {
-    return <div className="card p-8 text-center text-gray-500">Selecione um portal para visualizar documentos.</div>;
+    return <div className="card p-8 text-center text-gray-500 dark:text-slate-400">Selecione um portal para visualizar documentos.</div>;
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Documentos</h1>
-          <p className="text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Documentos</h1>
+          <p className="text-gray-500 dark:text-slate-400 mt-1">
             {user?.role === 'client'
               ? 'Documentos compartilhados do seu projeto'
               : `Documentos compartilhados do cliente ${activeClient?.company_name || ''}`}
@@ -93,13 +93,13 @@ export default function Documents() {
                 {fileIcon(doc.file_name)}
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-gray-900 truncate">{doc.title}</h3>
-                {doc.description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{doc.description}</p>}
+                <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate">{doc.title}</h3>
+                {doc.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 line-clamp-2">{doc.description}</p>}
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs text-gray-400">{doc.file_name}</span>
+                  <span className="text-xs text-gray-400 dark:text-slate-500">{doc.file_name}</span>
                   {doc.category && <span className="badge badge-gray text-xs">{doc.category}</span>}
                 </div>
-                <p className="text-xs text-gray-400 mt-1">por {doc.uploader_name} • {new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">por {doc.uploader_name} • {new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
@@ -116,8 +116,8 @@ export default function Documents() {
         ))}
         {!documents.length && (
           <div className="col-span-full card p-12 text-center">
-            <FolderOpen size={48} className="text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-400">Nenhum documento compartilhado ainda</p>
+            <FolderOpen size={48} className="text-gray-300 dark:text-slate-600 mx-auto mb-3" />
+            <p className="text-gray-400 dark:text-slate-500">Nenhum documento compartilhado ainda</p>
           </div>
         )}
       </div>
@@ -127,29 +127,29 @@ export default function Documents() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="card p-6 w-full max-w-lg">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Compartilhar Documento</h2>
-              <button onClick={() => setShowUpload(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Compartilhar Documento</h2>
+              <button onClick={() => setShowUpload(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-slate-200"><X size={20} /></button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Título</label>
                 <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="input-field" placeholder="Nome do documento" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Descrição</label>
                 <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="input-field h-20 resize-none" placeholder="Descrição opcional..." />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">URL do Arquivo</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">URL do Arquivo</label>
                 <input value={form.fileUrl} onChange={e => setForm({ ...form, fileUrl: e.target.value })} className="input-field" placeholder="https://..." />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Arquivo</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Nome do Arquivo</label>
                   <input value={form.fileName} onChange={e => setForm({ ...form, fileName: e.target.value })} className="input-field" placeholder="documento.pdf" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Categoria</label>
                   <input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="input-field" placeholder="Contrato, Relatório..." />
                 </div>
               </div>
