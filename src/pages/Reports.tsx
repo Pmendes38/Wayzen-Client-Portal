@@ -170,7 +170,7 @@ export default function Reports() {
         current: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
       },
     },
-    trends: { weekOverWeekConversion: [], beforeAfterWayzen: [] },
+    trends: { weekOverWeekConversion: [], beforeAfterWayzen: [], snapshotSeries: [] },
   });
   const [snapshots, setSnapshots] = useState<DailyOperationalSnapshot[]>([]);
   const [activeTab, setActiveTab] = useState<ReportTab>('analytics');
@@ -224,6 +224,7 @@ export default function Reports() {
     currentAvgTicket: 0,
   });
   const [reportPrefillMetrics, setReportPrefillMetrics] = useState<ReportPrefillMetrics | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshAnalytics = async (clientIdValue: number) => {
@@ -380,29 +381,41 @@ export default function Reports() {
 
     const summary = dailyLogForm.summary.trim() || buildAutoDailySummary();
 
-    await portalService.createDailyLog({
-      clientId,
-      logDate: dailyLogForm.logDate,
-      progressScore: Number(dailyLogForm.progressScore),
-      hoursWorked: Number(dailyLogForm.hoursWorked),
-      summary,
-      blockers: dailyLogForm.blockers || undefined,
-      nextSteps: dailyLogForm.nextSteps || undefined,
-    });
+    try {
+      await portalService.createDailyLog({
+        clientId,
+        logDate: dailyLogForm.logDate,
+        progressScore: Number(dailyLogForm.progressScore),
+        hoursWorked: Number(dailyLogForm.hoursWorked),
+        summary,
+        blockers: dailyLogForm.blockers || undefined,
+        nextSteps: dailyLogForm.nextSteps || undefined,
+      });
 
-    await portalService.upsertDailyOperationalSnapshot({
-      clientId,
-      snapshotDate: dailyLogForm.logDate,
-      ...snapshotForm,
-    });
+      await portalService.upsertDailyOperationalSnapshot({
+        clientId,
+        snapshotDate: dailyLogForm.logDate,
+        ...snapshotForm,
+      });
 
-    setDailyLogForm((prev) => ({ ...prev, summary: '', blockers: '', nextSteps: '' }));
-    const refreshed = await portalService.getDailyLogs(clientId);
-    const refreshedSnapshots = await portalService.getDailyOperationalSnapshots(clientId);
-    setDailyLogs(refreshed);
-    setSnapshots(refreshedSnapshots as DailyOperationalSnapshot[]);
-    await refreshAnalytics(clientId);
+      setDailyLogForm((prev) => ({ ...prev, summary: '', blockers: '', nextSteps: '' }));
+      const refreshed = await portalService.getDailyLogs(clientId);
+      const refreshedSnapshots = await portalService.getDailyOperationalSnapshots(clientId);
+      setDailyLogs(refreshed);
+      setSnapshots(refreshedSnapshots as DailyOperationalSnapshot[]);
+      await refreshAnalytics(clientId);
+      setSaveFeedback({ type: 'success', message: 'Registro salvo com sucesso!' });
+    } catch (error) {
+      console.error(error);
+      setSaveFeedback({ type: 'error', message: 'Nao foi possivel salvar o registro diario.' });
+    }
   };
+
+  useEffect(() => {
+    if (!saveFeedback) return;
+    const timeout = setTimeout(() => setSaveFeedback(null), 3000);
+    return () => clearTimeout(timeout);
+  }, [saveFeedback]);
 
   if (loading || loadingClients) return <PageLoader />;
 
@@ -412,6 +425,20 @@ export default function Reports() {
 
   return (
     <div className="space-y-5">
+      {saveFeedback && (
+        <div className="fixed right-4 top-4 z-40">
+          <div
+            className={`rounded-lg border px-4 py-3 text-sm shadow-md ${
+              saveFeedback.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-900/20 dark:text-emerald-300'
+                : 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-300'
+            }`}
+          >
+            {saveFeedback.message}
+          </div>
+        </div>
+      )}
+
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Hub de Relatorios e Analytics</h1>
         <p className="text-gray-500 dark:text-slate-400 mt-1">

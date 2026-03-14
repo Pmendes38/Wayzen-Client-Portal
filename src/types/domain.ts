@@ -237,6 +237,15 @@ export interface MarketingSalesAnalytics {
   trends: {
     weekOverWeekConversion: Array<{ label: string; value: number }>;
     beforeAfterWayzen: Array<{ label: string; before: number; after: number }>;
+    snapshotSeries?: Array<{
+      date: string;
+      whatsapp: number;
+      instagram: number;
+      site: number;
+      referral: number;
+      unanswered: number;
+      wowConversionVar: number;
+    }>;
   };
 }
 

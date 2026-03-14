@@ -857,16 +857,19 @@ export async function createDailyLog(payload: {
 
   const { data, error } = await supabase
     .from('daily_logs')
-    .insert({
-      client_id: payload.clientId,
-      consultant_user_id: user.id,
-      log_date: payload.logDate,
-      progress_score: payload.progressScore,
-      hours_worked: payload.hoursWorked,
-      summary: payload.summary,
-      blockers: payload.blockers,
-      next_steps: payload.nextSteps,
-    })
+    .upsert(
+      {
+        client_id: payload.clientId,
+        consultant_user_id: user.id,
+        log_date: payload.logDate,
+        progress_score: payload.progressScore,
+        hours_worked: payload.hoursWorked,
+        summary: payload.summary,
+        blockers: payload.blockers,
+        next_steps: payload.nextSteps,
+      },
+      { onConflict: 'client_id,consultant_user_id,log_date' }
+    )
     .select()
     .single();
 
@@ -1593,6 +1596,19 @@ export async function getAnalyticsData(clientId: number) {
     },
   ];
 
+  const snapshotSeries = snapshotRows
+    .slice()
+    .reverse()
+    .map((row) => ({
+      date: new Date(row.snapshot_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      whatsapp: Number(row.leads_whatsapp || 0),
+      instagram: Number(row.leads_instagram || 0),
+      site: Number(row.leads_site || 0),
+      referral: Number(row.leads_referral || 0),
+      unanswered: Number(row.leads_unanswered || 0),
+      wowConversionVar: Number(row.wow_conversion_var || 0),
+    }));
+
   return {
     marketing,
     sales,
@@ -1602,6 +1618,7 @@ export async function getAnalyticsData(clientId: number) {
     trends: {
       weekOverWeekConversion,
       beforeAfterWayzen,
+      snapshotSeries,
     },
   };
 }

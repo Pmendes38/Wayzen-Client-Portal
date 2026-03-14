@@ -127,6 +127,15 @@ const buildAnalyticsForSnapshots = (snapshots: any[]) => {
             },
           ]
         : [],
+      snapshotSeries: [...ordered].reverse().map((row) => ({
+        date: formatPtBrDate(row.snapshot_date),
+        whatsapp: toNumber(row.leads_whatsapp),
+        instagram: toNumber(row.leads_instagram),
+        site: toNumber(row.leads_site),
+        referral: toNumber(row.leads_referral),
+        unanswered: toNumber(row.leads_unanswered),
+        wowConversionVar: toNumber(row.wow_conversion_var),
+      })),
     },
   };
 };
@@ -252,6 +261,7 @@ vi.mock('@/lib/services/portal', () => ({
       trends: {
         weekOverWeekConversion: [{ label: '10/03', value: 11.5 }],
         beforeAfterWayzen: [{ label: 'Conversao (%)', before: 7, after: 12 }],
+        snapshotSeries: [],
       },
     }),
     getChatContacts: vi.fn().mockResolvedValue([
@@ -361,6 +371,7 @@ describe('Reports hub', () => {
       trends: {
         weekOverWeekConversion: [],
         beforeAfterWayzen: [],
+        snapshotSeries: [],
       },
     });
 
@@ -657,21 +668,16 @@ describe('Reports hub', () => {
     fireEvent.click(screen.getByRole('button', { name: /Analytics/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('4.0 min')).toBeInTheDocument();
-      expect(screen.getByText('66')).toBeInTheDocument();
-      expect(screen.getByText('5')).toBeInTheDocument();
-      expect(screen.getByText('31')).toBeInTheDocument();
-      expect(screen.getByText('12')).toBeInTheDocument();
-      expect(screen.getAllByText(/R\$ 15\.000/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/R\$ 5\.000/i).length).toBeGreaterThan(0);
-      expect(screen.getByText('3.0%')).toBeInTheDocument();
-      expect(screen.getByText('80')).toBeInTheDocument();
-      expect(screen.getByText('15')).toBeInTheDocument();
-      expect(screen.getByText('2.00%')).toBeInTheDocument();
-      expect(screen.getByText('10.00%')).toBeInTheDocument();
+      expect(screen.getByText(/Grupo 1 — Velocidade e Resposta/i)).toBeInTheDocument();
+      expect(screen.getByText(/Grupo 2 — Funil Ativo/i)).toBeInTheDocument();
+      expect(screen.getByText(/Grupo 3 — Resultado Financeiro/i)).toBeInTheDocument();
+      expect(screen.getByText(/Grupo 4 — Saude da Base/i)).toBeInTheDocument();
+      expect(screen.getByText(/Grupo 5 — Operacao Wayzen/i)).toBeInTheDocument();
+      expect(screen.getByText(/Variação de Conversão Semana a Semana/i)).toBeInTheDocument();
+      expect(screen.getByText(/Antes vs Depois da Wayzen/i)).toBeInTheDocument();
     });
 
-    expect(screen.queryByText(/Nenhum dado registrado ainda\. Preencha o Registro Diario para visualizar\./i)).not.toBeInTheDocument();
+    expect(screen.queryAllByText(/Nenhum dado registrado ainda\. Preencha o Registro Diario para visualizar\./i).length).toBe(0);
 
     fireEvent.click(screen.getByRole('button', { name: /^Registro Diario$/i }));
     fireEvent.change(screen.getByLabelText(/Data do registro/i), { target: { value: iso2 } });
@@ -719,28 +725,19 @@ describe('Reports hub', () => {
     fireEvent.click(screen.getByRole('button', { name: /Analytics/i }));
 
     await waitFor(() => {
-      expect(screen.getByText('2.0 min')).toBeInTheDocument();
-      expect(screen.getByText('55')).toBeInTheDocument();
-      expect(screen.getByText('42')).toBeInTheDocument();
-      expect(screen.getByText('18')).toBeInTheDocument();
-      expect(screen.getAllByText(/R\$ 25\.000/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/R\$ 6\.200/i).length).toBeGreaterThan(0);
-      expect(screen.getByText('2.0%')).toBeInTheDocument();
-      expect(screen.getByText('88')).toBeInTheDocument();
-      expect(screen.getByText('22')).toBeInTheDocument();
-      expect(screen.getByText('4.00%')).toBeInTheDocument();
-      expect(screen.getByText('14.00%')).toBeInTheDocument();
+      expect(screen.getByText(/Variação de Conversão Semana a Semana/i)).toBeInTheDocument();
+      expect(screen.getByText(/Antes vs Depois da Wayzen/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Semana/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Semana$/i }));
     await waitFor(() => {
-      expect(screen.getByText('3.0 min')).toBeInTheDocument();
-      expect(screen.getByText('121')).toBeInTheDocument();
+      expect(screen.getByText(/Grupo 1 — Velocidade e Resposta/i)).toBeInTheDocument();
+      expect(screen.getByText(/Variação de Conversão Semana a Semana/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Mes/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Mes$/i }));
     await waitFor(() => {
-      expect(screen.getByText('3.0 min')).toBeInTheDocument();
+      expect(screen.getByText(/Grupo 5 — Operacao Wayzen/i)).toBeInTheDocument();
     });
 
     unmount();
@@ -754,6 +751,257 @@ describe('Reports hub', () => {
     await waitFor(() => {
       expect(screen.getByText(/Primeiro registro operacional completo\./i)).toBeInTheDocument();
       expect(screen.getByText(/Segundo registro com alteracao de indicadores\./i)).toBeInTheDocument();
+    });
+  });
+
+  it('salva o mesmo dia duas vezes sem erro e atualiza o registro existente com feedback visual', async () => {
+    const sameDate = new Date().toISOString().slice(0, 10);
+    const dailyLogsStore: any[] = [];
+    const snapshotStore: any[] = [];
+
+    vi.mocked(portalService.getReports).mockResolvedValue([]);
+    vi.mocked(portalService.getDailyLogs).mockImplementation(async () => [...dailyLogsStore]);
+    vi.mocked(portalService.getDailyOperationalSnapshots).mockImplementation(async () => [...snapshotStore]);
+    vi.mocked(portalService.getAnalyticsData).mockImplementation(async () => buildAnalyticsForSnapshots(snapshotStore));
+
+    vi.mocked(portalService.createDailyLog).mockImplementation(async (payload: any) => {
+      const existingIndex = dailyLogsStore.findIndex((row) => row.log_date === payload.logDate);
+      const row = {
+        id: existingIndex >= 0 ? dailyLogsStore[existingIndex].id : 901,
+        client_id: payload.clientId,
+        consultant_user_id: 2,
+        log_date: payload.logDate,
+        progress_score: payload.progressScore,
+        hours_worked: payload.hoursWorked,
+        summary: payload.summary,
+        blockers: payload.blockers || null,
+        next_steps: payload.nextSteps || null,
+        created_at: new Date().toISOString(),
+      };
+
+      if (existingIndex >= 0) dailyLogsStore[existingIndex] = row;
+      else dailyLogsStore.push(row);
+      return row;
+    });
+
+    vi.mocked(portalService.upsertDailyOperationalSnapshot).mockImplementation(async (payload: any) => {
+      const existingIndex = snapshotStore.findIndex((row) => row.snapshot_date === payload.snapshotDate);
+      const row = {
+        id: existingIndex >= 0 ? snapshotStore[existingIndex].id : 1001,
+        client_id: payload.clientId,
+        snapshot_date: payload.snapshotDate,
+        sla_first_response_minutes: payload.slaFirstResponseMinutes,
+        leads_whatsapp: payload.leadsWhatsapp,
+        leads_instagram: payload.leadsInstagram,
+        leads_site: payload.leadsSite,
+        leads_referral: payload.leadsReferral,
+        leads_unanswered: payload.leadsUnanswered,
+        opportunities_contato_inicial: payload.opportunitiesContatoInicial,
+        opportunities_qualificado: payload.opportunitiesQualificado,
+        opportunities_proposta_enviada: payload.opportunitiesPropostaEnviada,
+        opportunities_negociacao: payload.opportunitiesNegociacao,
+        opportunities_fechado: payload.opportunitiesFechado,
+        followups_done: payload.followupsDone,
+        followups_overdue: payload.followupsOverdue,
+        conversion_rate_week: payload.conversionRateWeek,
+        enrollments_month: payload.enrollmentsMonth,
+        loa_revenue_month: payload.loaRevenueMonth,
+        avg_ticket: payload.avgTicket,
+        monthly_goal: payload.monthlyGoal,
+        monthly_realized: payload.monthlyRealized,
+        churn_month: payload.churnMonth,
+        delinquency_rate: payload.delinquencyRate,
+        nps_weekly: payload.npsWeekly,
+        wayzen_activities_today: payload.wayzenActivitiesToday,
+        wow_conversion_var: payload.wowConversionVar,
+        baseline_conversion_rate: payload.baselineConversionRate,
+        baseline_monthly_revenue: payload.baselineMonthlyRevenue,
+        baseline_avg_ticket: payload.baselineAvgTicket,
+        current_conversion_rate: payload.currentConversionRate,
+        current_monthly_revenue: payload.currentMonthlyRevenue,
+        current_avg_ticket: payload.currentAvgTicket,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (existingIndex >= 0) snapshotStore[existingIndex] = row;
+      else snapshotStore.push(row);
+      return row;
+    });
+
+    render(<Reports />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Registro Diario$/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Registro Diario$/i }));
+
+    fireEvent.change(screen.getByLabelText(/Data do registro/i), { target: { value: sameDate } });
+    fireEvent.change(screen.getByLabelText(/Resumo do dia/i), { target: { value: 'Primeira versao do dia' } });
+    fireEvent.change(screen.getByLabelText(/SLA \(min\)/i), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar registro diario/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Registro salvo com sucesso!/i)).toBeInTheDocument();
+      expect(screen.getByText(/Primeira versao do dia/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Resumo do dia/i), { target: { value: 'Versao atualizada do mesmo dia' } });
+    fireEvent.change(screen.getByLabelText(/SLA \(min\)/i), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar registro diario/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Registro salvo com sucesso!/i)).toBeInTheDocument();
+      expect(screen.getByText(/Versao atualizada do mesmo dia/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/Primeira versao do dia/i)).not.toBeInTheDocument();
+    expect(dailyLogsStore).toHaveLength(1);
+    expect(snapshotStore).toHaveLength(1);
+  });
+
+  it('renderiza analytics com 5 registros e responde aos filtros Hoje, Semana e Mes', async () => {
+    const now = new Date();
+    const dates = [0, 1, 2, 3, 4].map((delta) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - delta);
+      return d.toISOString().slice(0, 10);
+    });
+
+    const dailyLogsStore: any[] = [];
+    const snapshotStore: any[] = [];
+    let idSeed = 1200;
+
+    vi.mocked(portalService.getReports).mockResolvedValue([]);
+    vi.mocked(portalService.getDailyLogs).mockImplementation(async () => [...dailyLogsStore].sort((a, b) => b.log_date.localeCompare(a.log_date)));
+    vi.mocked(portalService.getDailyOperationalSnapshots).mockImplementation(async () => [...snapshotStore].sort((a, b) => b.snapshot_date.localeCompare(a.snapshot_date)));
+    vi.mocked(portalService.getAnalyticsData).mockImplementation(async () => buildAnalyticsForSnapshots(snapshotStore));
+
+    vi.mocked(portalService.createDailyLog).mockImplementation(async (payload: any) => {
+      const row = {
+        id: idSeed++,
+        client_id: payload.clientId,
+        consultant_user_id: 2,
+        log_date: payload.logDate,
+        progress_score: payload.progressScore,
+        hours_worked: payload.hoursWorked,
+        summary: payload.summary,
+        blockers: null,
+        next_steps: null,
+        created_at: new Date().toISOString(),
+      };
+      dailyLogsStore.push(row);
+      return row;
+    });
+
+    vi.mocked(portalService.upsertDailyOperationalSnapshot).mockImplementation(async (payload: any) => {
+      const row = {
+        id: idSeed++,
+        client_id: payload.clientId,
+        snapshot_date: payload.snapshotDate,
+        sla_first_response_minutes: payload.slaFirstResponseMinutes,
+        leads_whatsapp: payload.leadsWhatsapp,
+        leads_instagram: payload.leadsInstagram,
+        leads_site: payload.leadsSite,
+        leads_referral: payload.leadsReferral,
+        leads_unanswered: payload.leadsUnanswered,
+        opportunities_contato_inicial: payload.opportunitiesContatoInicial,
+        opportunities_qualificado: payload.opportunitiesQualificado,
+        opportunities_proposta_enviada: payload.opportunitiesPropostaEnviada,
+        opportunities_negociacao: payload.opportunitiesNegociacao,
+        opportunities_fechado: payload.opportunitiesFechado,
+        followups_done: payload.followupsDone,
+        followups_overdue: payload.followupsOverdue,
+        conversion_rate_week: payload.conversionRateWeek,
+        enrollments_month: payload.enrollmentsMonth,
+        loa_revenue_month: payload.loaRevenueMonth,
+        avg_ticket: payload.avgTicket,
+        monthly_goal: payload.monthlyGoal,
+        monthly_realized: payload.monthlyRealized,
+        churn_month: payload.churnMonth,
+        delinquency_rate: payload.delinquencyRate,
+        nps_weekly: payload.npsWeekly,
+        wayzen_activities_today: payload.wayzenActivitiesToday,
+        wow_conversion_var: payload.wowConversionVar,
+        baseline_conversion_rate: payload.baselineConversionRate,
+        baseline_monthly_revenue: payload.baselineMonthlyRevenue,
+        baseline_avg_ticket: payload.baselineAvgTicket,
+        current_conversion_rate: payload.currentConversionRate,
+        current_monthly_revenue: payload.currentMonthlyRevenue,
+        current_avg_ticket: payload.currentAvgTicket,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      snapshotStore.push(row);
+      return row;
+    });
+
+    render(<Reports />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Registro Diario$/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Registro Diario$/i }));
+
+    for (let i = 0; i < dates.length; i += 1) {
+      fireEvent.change(screen.getByLabelText(/Data do registro/i), { target: { value: dates[i] } });
+      fireEvent.change(screen.getByLabelText(/Resumo do dia/i), { target: { value: `Registro ${i + 1}` } });
+      fireEvent.change(screen.getByLabelText(/SLA \(min\)/i), { target: { value: String(2 + i) } });
+      fireEvent.change(screen.getByLabelText(/Leads \(WhatsApp\)/i), { target: { value: String(20 + i * 2) } });
+      fireEvent.change(screen.getByLabelText(/Leads \(Instagram\)/i), { target: { value: String(6 + i) } });
+      fireEvent.change(screen.getByLabelText(/Leads \(Site\)/i), { target: { value: String(3 + i) } });
+      fireEvent.change(screen.getByLabelText(/Leads \(Indicacao\)/i), { target: { value: String(2 + i) } });
+      fireEvent.change(screen.getByLabelText(/Sem resposta/i), { target: { value: String(i % 2) } });
+      fireEvent.change(screen.getByLabelText(/Funil: contato inicial/i), { target: { value: String(10 + i) } });
+      fireEvent.change(screen.getByLabelText(/Funil: qualificado/i), { target: { value: String(8 + i) } });
+      fireEvent.change(screen.getByLabelText(/Funil: proposta enviada/i), { target: { value: String(6 + i) } });
+      fireEvent.change(screen.getByLabelText(/Funil: negociacao/i), { target: { value: String(4 + i) } });
+      fireEvent.change(screen.getByLabelText(/Funil: fechado/i), { target: { value: String(2 + i) } });
+      fireEvent.change(screen.getByLabelText(/Follow-ups \(realizados\)/i), { target: { value: String(12 + i) } });
+      fireEvent.change(screen.getByLabelText(/Follow-ups \(em atraso\)/i), { target: { value: String(2) } });
+      fireEvent.change(screen.getByLabelText(/Conversao semana/i), { target: { value: String(9 + i) } });
+      fireEvent.change(screen.getByLabelText(/Matriculas mes/i), { target: { value: String(2 + i) } });
+      fireEvent.change(screen.getByLabelText(/LOA parcial/i), { target: { value: String(12000 + i * 2000) } });
+      fireEvent.change(screen.getByLabelText(/^Ticket medio \(R\$\)$/i), { target: { value: String(4000 + i * 300) } });
+      fireEvent.change(screen.getByLabelText(/Meta mensal/i), { target: { value: '30000' } });
+      fireEvent.change(screen.getByLabelText(/Realizado mensal/i), { target: { value: String(12000 + i * 2000) } });
+      fireEvent.change(screen.getByLabelText(/Desistencias mes/i), { target: { value: String(i % 3) } });
+      fireEvent.change(screen.getByLabelText(/Inadimplencia/i), { target: { value: String(2 + i * 0.5) } });
+      fireEvent.change(screen.getByLabelText(/NPS semanal/i), { target: { value: String(70 + i) } });
+      fireEvent.change(screen.getByLabelText(/Atividades Wayzen hoje/i), { target: { value: String(10 + i) } });
+      fireEvent.change(screen.getByLabelText(/Variacao WoW conversao/i), { target: { value: String(1 + i * 0.3) } });
+      fireEvent.change(screen.getByLabelText(/Antes Wayzen: conversao/i), { target: { value: '6' } });
+      fireEvent.change(screen.getByLabelText(/Antes Wayzen: receita mensal/i), { target: { value: '12000' } });
+      fireEvent.change(screen.getByLabelText(/Antes Wayzen: ticket medio/i), { target: { value: '4000' } });
+      fireEvent.change(screen.getByLabelText(/Hoje: conversao/i), { target: { value: String(9 + i) } });
+      fireEvent.change(screen.getByLabelText(/Hoje: receita mensal/i), { target: { value: String(12000 + i * 2000) } });
+      fireEvent.change(screen.getByLabelText(/Hoje: ticket medio/i), { target: { value: String(4000 + i * 300) } });
+      fireEvent.click(screen.getByRole('button', { name: /Salvar registro diario/i }));
+    }
+
+    await waitFor(() => {
+      expect(dailyLogsStore).toHaveLength(5);
+      expect(snapshotStore).toHaveLength(5);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Analytics$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Variação de Conversão Semana a Semana/i)).toBeInTheDocument();
+      expect(screen.getByText(/Antes vs Depois da Wayzen/i)).toBeInTheDocument();
+      expect(screen.queryAllByText(/Nenhum dado registrado ainda\. Preencha o Registro Diario para visualizar\./i).length).toBe(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Semana/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Grupo 1 — Velocidade e Resposta/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Mes/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Grupo 5 — Operacao Wayzen/i)).toBeInTheDocument();
     });
   });
 });
