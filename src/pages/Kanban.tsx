@@ -103,7 +103,12 @@ export default function Kanban() {
       updates.sprintId = target.sprint_id || defaultSprintId;
     }
 
-    await portalService.updateSprintBacklogItem(itemId, updates);
+    await portalService.updateSprintBacklogItem(itemId, {
+      ...updates,
+      clientId: activeClientId || undefined,
+      title: target.title,
+      dueDate: target.due_date || undefined,
+    });
 
     setBacklog((prev) => prev.map((item) => {
       if (item.id !== itemId) return item;
@@ -113,6 +118,13 @@ export default function Kanban() {
         sprint_id: updates.sprintId === undefined ? item.sprint_id : updates.sprintId,
       };
     }));
+  };
+
+  const archiveCompleted = async () => {
+    if (!activeClientId) return;
+    await portalService.archiveCompletedBacklogItems(activeClientId);
+    const data = await portalService.getSprintBacklog(activeClientId);
+    setBacklog(data as SprintBacklogItem[]);
   };
 
   if (loading || loadingClients) return <PageLoader />;
@@ -126,6 +138,15 @@ export default function Kanban() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">Kanban do Projeto</h1>
         <p className="text-gray-500 dark:text-slate-400 mt-1">Backlog operacional de {activeClient?.company_name || 'cliente'} sincronizado com Sprint.</p>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          className="btn-secondary"
+          onClick={() => archiveCompleted().catch(console.error)}
+        >
+          Arquivar atividades concluidas
+        </button>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5 dark:border-slate-700 dark:bg-slate-900">

@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Pencil, Plus, Trash2, Users, X } from 'lucide-react';
+import { Mail, MessageCircle, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import { ProjectContact } from '@/types/domain';
 
 type ProjectContactInput = Omit<ProjectContact, 'id' | 'client_id' | 'created_at'>;
 
 type ProjectContactsPanelProps = {
   contacts: ProjectContact[];
-  onCreate: (payload: ProjectContactInput) => void;
-  onUpdate: (contactId: number, payload: ProjectContactInput) => void;
-  onDelete: (contactId: number) => void;
+  onCreate: (payload: ProjectContactInput) => Promise<void>;
+  onUpdate: (contactId: number, payload: ProjectContactInput) => Promise<void>;
+  onDelete: (contactId: number) => Promise<void>;
 };
 
 const emptyForm: ProjectContactInput = {
@@ -23,6 +23,8 @@ export default function ProjectContactsPanel({ contacts, onCreate, onUpdate, onD
   const [isOpen, setIsOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ProjectContactInput>(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const openCreate = () => {
     setEditingId(null);
@@ -48,8 +50,31 @@ export default function ProjectContactsPanel({ contacts, onCreate, onUpdate, onD
     setForm(emptyForm);
   };
 
-  const submit = () => {
+  const sanitizePhone = (phone: string) => phone.replace(/\D/g, '');
+
+  const openWhatsapp = (phone: string, name: string) => {
+    const normalized = sanitizePhone(phone);
+    if (!normalized) {
+      setFeedback('Numero de telefone invalido para WhatsApp.');
+      return;
+    }
+    const message = encodeURIComponent(`Oi ${name}, tudo bem? Mensagem enviada pelo portal Wayzen.`);
+    window.open(`https://wa.me/${normalized}?text=${message}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleDelete = async (contactId: number) => {
+    try {
+      await onDelete(contactId);
+      setFeedback('Contato removido com sucesso.');
+    } catch (err: any) {
+      console.error(err);
+      setFeedback(err?.message || 'Nao foi possivel excluir o contato.');
+    }
+  };
+
+  const submit = async () => {
     if (!form.name.trim() || !form.role.trim() || !form.email.trim() || !form.phone.trim() || !form.notes.trim()) {
+      setFeedback('Preencha todos os campos para salvar o contato.');
       return;
     }
 
@@ -61,13 +86,24 @@ export default function ProjectContactsPanel({ contacts, onCreate, onUpdate, onD
       notes: form.notes.trim(),
     };
 
-    if (editingId) {
-      onUpdate(editingId, payload);
-    } else {
-      onCreate(payload);
-    }
+    setSubmitting(true);
+    setFeedback(null);
 
-    close();
+    try {
+      if (editingId) {
+        await onUpdate(editingId, payload);
+        setFeedback('Contato atualizado com sucesso.');
+      } else {
+        await onCreate(payload);
+        setFeedback('Contato criado com sucesso.');
+      }
+      close();
+    } catch (err: any) {
+      console.error(err);
+      setFeedback(err?.message || 'Nao foi possivel salvar o contato.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -107,7 +143,21 @@ export default function ProjectContactsPanel({ contacts, onCreate, onUpdate, onD
                     <button className="rounded-lg border border-slate-200 p-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" onClick={() => openEdit(contact)} aria-label={`Editar ${contact.name}`}>
                       <Pencil size={14} />
                     </button>
-                    <button className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/30" onClick={() => onDelete(contact.id)} aria-label={`Excluir ${contact.name}`}>
+                    <button
+                      className="rounded-lg border border-slate-200 p-2 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      onClick={() => window.open(`mailto:${contact.email}`, '_blank', 'noopener,noreferrer')}
+                      aria-label={`Enviar email para ${contact.name}`}
+                    >
+                      <Mail size={14} />
+                    </button>
+                    <button
+                      className="rounded-lg border border-emerald-200 p-2 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-900/50 dark:hover:bg-emerald-950/30"
+                      onClick={() => openWhatsapp(contact.phone, contact.name)}
+                      aria-label={`Enviar WhatsApp para ${contact.name}`}
+                    >
+                      <MessageCircle size={14} />
+                    </button>
+                    <button className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/30" onClick={() => handleDelete(contact.id)} aria-label={`Excluir ${contact.name}`}>
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -147,9 +197,15 @@ export default function ProjectContactsPanel({ contacts, onCreate, onUpdate, onD
 
             <div className="mt-4 flex justify-end gap-2">
               <button className="btn-secondary" onClick={close}>Cancelar</button>
-              <button className="btn-primary" onClick={submit}>{editingId ? 'Salvar' : 'Criar contato'}</button>
+              <button className="btn-primary" onClick={submit} disabled={submitting}>{submitting ? 'Salvando...' : editingId ? 'Salvar' : 'Criar contato'}</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {feedback && (
+        <div className="px-5 pb-4 text-sm text-slate-600 dark:text-slate-300">
+          {feedback}
         </div>
       )}
     </section>

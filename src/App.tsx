@@ -14,6 +14,7 @@ import Notifications from '@/pages/Notifications';
 import ClientPortals from '@/pages/ClientPortals';
 import DailyLogs from '@/pages/DailyLogs';
 import Meetings from '@/pages/Meetings';
+import MarketingData from '@/pages/MarketingData';
 import PageLoader from '@/components/PageLoader';
 import { ThemeProvider } from '@/hooks/useTheme';
 
@@ -64,6 +65,7 @@ function AppRoutes() {
         <Route path="/portals" element={<PortalGuard><ClientPortals /></PortalGuard>} />
         <Route path="/daily-logs" element={<PortalGuard><DailyLogs /></PortalGuard>} />
         <Route path="/meetings" element={<PortalGuard><Meetings /></PortalGuard>} />
+        <Route path="/marketing-data" element={<PortalGuard><MarketingData /></PortalGuard>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

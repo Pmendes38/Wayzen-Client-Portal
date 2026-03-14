@@ -61,6 +61,8 @@ describe('Agenda e contatos do projeto', () => {
     fireEvent.change(screen.getByPlaceholderText('Observacoes'), { target: { value: 'Responsavel pelo marketing' } });
     fireEvent.click(screen.getByRole('button', { name: /Criar contato/i }));
 
-    expect(screen.getByText('Ana Paula')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Ana Paula')).toBeInTheDocument();
+    });
   });
 });

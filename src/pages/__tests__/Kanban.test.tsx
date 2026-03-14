@@ -5,6 +5,7 @@ import Kanban from '@/pages/Kanban';
 const hoisted = vi.hoisted(() => ({
   mockUpdateBacklogItem: vi.fn().mockResolvedValue(undefined),
   mockCreateBacklogItem: vi.fn().mockResolvedValue({}),
+  mockArchiveCompletedBacklog: vi.fn().mockResolvedValue(undefined),
   mockGetSprintBacklog: vi.fn(),
   mockGetSprints: vi.fn(),
 }));
@@ -24,6 +25,7 @@ vi.mock('@/lib/services/portal', () => ({
     getSprintBacklog: hoisted.mockGetSprintBacklog,
     updateSprintBacklogItem: hoisted.mockUpdateBacklogItem,
     createSprintBacklogItem: hoisted.mockCreateBacklogItem,
+    archiveCompletedBacklogItems: hoisted.mockArchiveCompletedBacklog,
   },
 }));
 
@@ -72,6 +74,7 @@ beforeEach(() => {
   hoisted.mockGetSprintBacklog.mockResolvedValue([...BACKLOG_DATA]);
   hoisted.mockUpdateBacklogItem.mockClear();
   hoisted.mockCreateBacklogItem.mockClear();
+  hoisted.mockArchiveCompletedBacklog.mockClear();
 });
 
 describe('Kanban — quadro operacional', () => {
@@ -203,6 +206,17 @@ describe('Kanban — quadro operacional', () => {
     await waitFor(() => {
       const placeholders = screen.getAllByText('Arraste tarefas para esta coluna.');
       expect(placeholders.length).toBe(4);
+    });
+  });
+
+  it('arquiva atividades concluidas quando clica no botao de arquivar', async () => {
+    render(<Kanban />);
+    await waitFor(() => screen.getByText('Kanban do Projeto'));
+
+    fireEvent.click(screen.getByText('Arquivar atividades concluidas'));
+
+    await waitFor(() => {
+      expect(hoisted.mockArchiveCompletedBacklog).toHaveBeenCalledWith(1);
     });
   });
 });

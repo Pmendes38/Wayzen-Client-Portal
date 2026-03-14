@@ -230,3 +230,21 @@ export interface MarketingSalesAnalytics {
   correlation: CorrelationMetricPoint[];
   funnel: FunnelStagePoint[];
 }
+
+export interface MarketingDataEntry {
+  id: number;
+  client_id: number;
+  period_date: string;
+  channel: string;
+  campaign_name: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  meetings_booked: number;
+  proposals_sent: number;
+  deals_won: number;
+  revenue: number;
+  notes?: string | null;
+  created_at: string;
+}

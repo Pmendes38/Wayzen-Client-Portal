@@ -75,3 +75,44 @@ create policy "Internal can write calendar events"
 on public.project_calendar_events for all
 using (public.portal_is_admin() or public.portal_is_consultant())
 with check (public.portal_is_admin() or public.portal_is_consultant());
+
+-- =====================================================
+-- MARKETING INPUTS (used by Analytics + Reports)
+-- =====================================================
+
+create table if not exists public.marketing_data_entries (
+  id bigserial primary key,
+  client_id bigint not null references public.clients(id) on delete cascade,
+  period_date date not null,
+  channel varchar(120) not null,
+  campaign_name varchar(255) not null,
+  spend numeric(12,2) not null default 0,
+  impressions bigint not null default 0,
+  clicks bigint not null default 0,
+  leads integer not null default 0,
+  meetings_booked integer not null default 0,
+  proposals_sent integer not null default 0,
+  deals_won integer not null default 0,
+  revenue numeric(12,2) not null default 0,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_marketing_data_entries_client_period
+  on public.marketing_data_entries(client_id, period_date desc);
+
+alter table public.marketing_data_entries enable row level security;
+
+drop policy if exists "Portal users can read marketing data entries" on public.marketing_data_entries;
+create policy "Portal users can read marketing data entries"
+on public.marketing_data_entries for select
+using (
+  (public.portal_is_admin() or public.portal_is_consultant())
+  or client_id = public.portal_user_client_id()
+);
+
+drop policy if exists "Internal can write marketing data entries" on public.marketing_data_entries;
+create policy "Internal can write marketing data entries"
+on public.marketing_data_entries for all
+using (public.portal_is_admin() or public.portal_is_consultant())
+with check (public.portal_is_admin() or public.portal_is_consultant());

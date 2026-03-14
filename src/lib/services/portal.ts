@@ -46,6 +46,7 @@ export const portalService = {
     endDate?: string;
     notes?: string;
   }) => queries.createSprint(payload),
+  deleteSprint: (sprintId: number) => queries.deleteSprint(sprintId),
   updateSprint: (sprintId: number, payload: {
     status?: 'planned' | 'in_progress' | 'completed';
     startDate?: string;
@@ -64,6 +65,7 @@ export const portalService = {
     taskOrder?: number;
   }) => queries.createSprintTask(payload),
   updateSprintTask: (taskId: number, payload: { isCompleted?: boolean; title?: string; description?: string }) => queries.updateSprintTask(taskId, payload),
+  deleteSprintTask: (taskId: number) => queries.deleteSprintTask(taskId),
   getSprintBacklog: (clientId: number) => queries.getSprintBacklog(clientId),
   updateSprintBacklogItem: (backlogId: number, payload: {
     status?: 'planned' | 'in_progress' | 'done';
@@ -81,6 +83,7 @@ export const portalService = {
     occurredOn?: string;
     dueDate?: string;
   }) => queries.createSprintBacklogItem(payload),
+  archiveCompletedBacklogItems: (clientId: number) => queries.archiveCompletedBacklogItems(clientId),
 
   getTickets: (clientId?: number) => queries.getTickets(clientId),
   getTicketMessages: (ticketId: number) => queries.getTicketMessages(ticketId),
@@ -165,6 +168,24 @@ export const portalService = {
     description?: string | null;
     participant_ids?: number[];
   }>) => queries.syncProjectCalendarEvents(clientId, events),
+
+  getMarketingDataEntries: (clientId: number) => queries.getMarketingDataEntries(clientId),
+  createMarketingDataEntry: (payload: {
+    clientId: number;
+    periodDate: string;
+    channel: string;
+    campaignName: string;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    leads: number;
+    meetingsBooked: number;
+    proposalsSent: number;
+    dealsWon: number;
+    revenue: number;
+    notes?: string;
+  }) => queries.createMarketingDataEntry(payload),
+  deleteMarketingDataEntry: (entryId: number) => queries.deleteMarketingDataEntry(entryId),
 
   getAnalyticsData: (clientId: number) => queries.getAnalyticsData(clientId),
   getDashboardSalesSeries: (clientId: number) => queries.getDashboardSalesSeries(clientId),

@@ -7,6 +7,9 @@ const hoisted = vi.hoisted(() => ({
   mockUpdateSprint: vi.fn().mockResolvedValue(undefined),
   mockCreateSprint: vi.fn().mockResolvedValue({}),
   mockCreateSprintTask: vi.fn().mockResolvedValue({}),
+  mockCreateSprintBacklogItem: vi.fn().mockResolvedValue({ id: 500 }),
+  mockDeleteSprint: vi.fn().mockResolvedValue(undefined),
+  mockDeleteSprintTask: vi.fn().mockResolvedValue(undefined),
   mockGetSprintTasks: vi.fn(),
   mockGetSprints: vi.fn(),
 }));
@@ -28,6 +31,9 @@ vi.mock('@/lib/services/portal', () => ({
     updateSprint: hoisted.mockUpdateSprint,
     createSprint: hoisted.mockCreateSprint,
     createSprintTask: hoisted.mockCreateSprintTask,
+    createSprintBacklogItem: hoisted.mockCreateSprintBacklogItem,
+    deleteSprint: hoisted.mockDeleteSprint,
+    deleteSprintTask: hoisted.mockDeleteSprintTask,
   },
 }));
 
@@ -47,6 +53,9 @@ beforeEach(() => {
   hoisted.mockUpdateSprint.mockClear();
   hoisted.mockCreateSprint.mockClear();
   hoisted.mockCreateSprintTask.mockClear();
+  hoisted.mockCreateSprintBacklogItem.mockClear();
+  hoisted.mockDeleteSprint.mockClear();
+  hoisted.mockDeleteSprintTask.mockClear();
 });
 
 describe('Sprints — visao macro', () => {
@@ -61,7 +70,7 @@ describe('Sprints — visao macro', () => {
   it('expande sprint e carrega atividades', async () => {
     render(<Sprints />);
     await waitFor(() => screen.getByText('Sprint Macro'));
-    fireEvent.click(screen.getByText('Sprint Macro').closest('button')!);
+    fireEvent.click(screen.getByText('Sprint Macro'));
     await waitFor(() => {
       expect(screen.getByText('Configurar ambiente')).toBeInTheDocument();
       expect(screen.getByText('Criar estrutura de dados')).toBeInTheDocument();
@@ -71,7 +80,7 @@ describe('Sprints — visao macro', () => {
   it('exibe barra de progresso com percentual real', async () => {
     render(<Sprints />);
     await waitFor(() => screen.getByText('Sprint Macro'));
-    fireEvent.click(screen.getByText('Sprint Macro').closest('button')!);
+    fireEvent.click(screen.getByText('Sprint Macro'));
     await waitFor(() => screen.getByText('Configurar ambiente'));
     // 1 of 2 completed = 50%
     expect(screen.getByText(/1 de 2 atividades concluidas/)).toBeInTheDocument();
@@ -81,7 +90,7 @@ describe('Sprints — visao macro', () => {
   it('marca atividade pendente como concluida ao clicar no circulo', async () => {
     render(<Sprints />);
     await waitFor(() => screen.getByText('Sprint Macro'));
-    fireEvent.click(screen.getByText('Sprint Macro').closest('button')!);
+    fireEvent.click(screen.getByText('Sprint Macro'));
     await waitFor(() => screen.getByText('Configurar ambiente'));
 
     const unchecked = screen.getAllByLabelText('Marcar como concluida');
@@ -95,7 +104,7 @@ describe('Sprints — visao macro', () => {
   it('desmarca atividade concluida ao clicar em checkmark', async () => {
     render(<Sprints />);
     await waitFor(() => screen.getByText('Sprint Macro'));
-    fireEvent.click(screen.getByText('Sprint Macro').closest('button')!);
+    fireEvent.click(screen.getByText('Sprint Macro'));
     await waitFor(() => screen.getByText('Criar estrutura de dados'));
 
     const checked = screen.getByLabelText('Desmarcar como concluida');
@@ -178,7 +187,7 @@ describe('Sprints — visao macro', () => {
   it('adiciona nova atividade a sprint existente', async () => {
     render(<Sprints />);
     await waitFor(() => screen.getByText('Sprint Macro'));
-    fireEvent.click(screen.getByText('Sprint Macro').closest('button')!);
+    fireEvent.click(screen.getByText('Sprint Macro'));
     await waitFor(() => screen.getByText('Nova atividade'));
 
     fireEvent.click(screen.getByText('Nova atividade'));
@@ -188,9 +197,37 @@ describe('Sprints — visao macro', () => {
     fireEvent.click(screen.getByText('Adicionar'));
 
     await waitFor(() => {
-      expect(hoisted.mockCreateSprintTask).toHaveBeenCalledWith(
-        expect.objectContaining({ sprintId: 99, title: 'Tarefa nova' }),
+      expect(hoisted.mockCreateSprintBacklogItem).toHaveBeenCalledWith(
+        expect.objectContaining({ sprintId: 99, title: 'Tarefa nova', clientId: 1 }),
       );
+      expect(hoisted.mockCreateSprintTask).toHaveBeenCalledWith(
+        expect.objectContaining({ sprintId: 99, title: 'Tarefa nova', backlogItemId: 500 }),
+      );
+    });
+  });
+
+  it('exclui sprint ao clicar no botao de lixeira', async () => {
+    render(<Sprints />);
+    await waitFor(() => screen.getByText('Sprint Macro'));
+
+    fireEvent.click(screen.getByLabelText('Excluir sprint'));
+
+    await waitFor(() => {
+      expect(hoisted.mockDeleteSprint).toHaveBeenCalledWith(99);
+    });
+  });
+
+  it('exclui atividade da sprint ao clicar no botao de lixeira da atividade', async () => {
+    render(<Sprints />);
+    await waitFor(() => screen.getByText('Sprint Macro'));
+    fireEvent.click(screen.getByText('Sprint Macro'));
+    await waitFor(() => screen.getByText('Configurar ambiente'));
+
+    const deleteTaskButtons = screen.getAllByLabelText('Excluir atividade');
+    fireEvent.click(deleteTaskButtons[0]);
+
+    await waitFor(() => {
+      expect(hoisted.mockDeleteSprintTask).toHaveBeenCalledWith(10);
     });
   });
 
@@ -216,7 +253,7 @@ describe('Sprints — visao macro', () => {
     render(<Sprints />);
     await waitFor(() => screen.getByText('Sprint Macro'));
     // Expanding should not crash the component (tasks list stays empty)
-    fireEvent.click(screen.getByText('Sprint Macro').closest('button')!);
+    fireEvent.click(screen.getByText('Sprint Macro'));
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByText('Sprint Macro')).toBeInTheDocument();
   });

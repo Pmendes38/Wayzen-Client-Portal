@@ -59,6 +59,11 @@ export default function Reports() {
   });
   const [loading, setLoading] = useState(true);
 
+  const refreshAnalytics = async (clientIdValue: number) => {
+    const analytics = await portalService.getAnalyticsData(clientIdValue);
+    setAnalyticsData(analytics as MarketingSalesAnalytics);
+  };
+
   useEffect(() => {
     if (loadingClients) return;
     if (!activeClientId) {
@@ -107,6 +112,7 @@ export default function Reports() {
 
     const refreshed = await portalService.getReports(clientId);
     setReports(refreshed);
+    await refreshAnalytics(clientId);
     setForm({ title: '', type: 'weekly', periodStart: '', periodEnd: '', content: '', metrics: '' });
   };
 
@@ -126,6 +132,7 @@ export default function Reports() {
     setDailyLogForm((prev) => ({ ...prev, summary: '', blockers: '', nextSteps: '' }));
     const refreshed = await portalService.getDailyLogs(clientId);
     setDailyLogs(refreshed);
+    await refreshAnalytics(clientId);
   };
 
   if (loading || loadingClients) return <PageLoader />;

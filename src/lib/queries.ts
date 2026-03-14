@@ -254,6 +254,15 @@ export async function updateSprint(sprintId: number, updates: {
   }
 }
 
+export async function deleteSprint(sprintId: number) {
+  const { error } = await supabase
+    .from('sprints')
+    .delete()
+    .eq('id', sprintId);
+
+  if (error) throw error;
+}
+
 export async function createSprintTask(taskData: {
   sprintId: number;
   backlogItemId?: number | null;
@@ -295,6 +304,15 @@ export async function updateSprintTask(taskId: number, updates: { isCompleted?: 
   const { error } = await supabase
     .from('sprint_tasks')
     .update(payload)
+    .eq('id', taskId);
+
+  if (error) throw error;
+}
+
+export async function deleteSprintTask(taskId: number) {
+  const { error } = await supabase
+    .from('sprint_tasks')
+    .delete()
     .eq('id', taskId);
 
   if (error) throw error;
@@ -387,6 +405,16 @@ export async function createSprintBacklogItem(itemData: {
     upsertBacklogCalendarEvent(itemData.clientId, data.id, itemData.title, itemData.dueDate).catch(console.error);
   }
   return data;
+}
+
+export async function archiveCompletedBacklogItems(clientId: number) {
+  const { error } = await supabase
+    .from('sprint_backlog')
+    .delete()
+    .eq('client_id', clientId)
+    .eq('status', 'done');
+
+  if (error) throw error;
 }
 
 // ─── Tickets ─────────────────────────────────────────────────────────
@@ -1124,8 +1152,68 @@ export async function syncProjectCalendarEvents(clientId: number, events: Array<
   if (upsertError) throw upsertError;
 }
 
+export async function getMarketingDataEntries(clientId: number) {
+  const { data, error } = await supabase
+    .from('marketing_data_entries')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('period_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createMarketingDataEntry(payload: {
+  clientId: number;
+  periodDate: string;
+  channel: string;
+  campaignName: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  meetingsBooked: number;
+  proposalsSent: number;
+  dealsWon: number;
+  revenue: number;
+  notes?: string;
+}) {
+  const { data, error } = await supabase
+    .from('marketing_data_entries')
+    .insert({
+      client_id: payload.clientId,
+      period_date: payload.periodDate,
+      channel: payload.channel,
+      campaign_name: payload.campaignName,
+      spend: payload.spend,
+      impressions: payload.impressions,
+      clicks: payload.clicks,
+      leads: payload.leads,
+      meetings_booked: payload.meetingsBooked,
+      proposals_sent: payload.proposalsSent,
+      deals_won: payload.dealsWon,
+      revenue: payload.revenue,
+      notes: payload.notes || null,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteMarketingDataEntry(entryId: number) {
+  const { error } = await supabase
+    .from('marketing_data_entries')
+    .delete()
+    .eq('id', entryId);
+
+  if (error) throw error;
+}
+
 export async function getAnalyticsData(clientId: number) {
-  const [reports, dailyLogs, meetings, tickets] = await Promise.all([
+  const [reports, dailyLogs, meetings, tickets, marketingEntries] = await Promise.all([
     supabase
       .from('shared_reports')
       .select('period_end, metrics')
@@ -1146,14 +1234,31 @@ export async function getAnalyticsData(clientId: number) {
       .select('created_at, status')
       .eq('client_id', clientId)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('marketing_data_entries')
+      .select('period_date, spend, leads, meetings_booked, proposals_sent, deals_won, revenue, channel, impressions, clicks')
+      .eq('client_id', clientId)
+      .order('period_date', { ascending: true }),
   ]);
 
   if (reports.error) throw reports.error;
   if (dailyLogs.error) throw dailyLogs.error;
   if (meetings.error) throw meetings.error;
   if (tickets.error) throw tickets.error;
+  if (marketingEntries.error) throw marketingEntries.error;
 
   const monthly: Record<string, any> = {};
+  const toMonthKey = (rawDate?: string | null) => {
+    const date = rawDate ? new Date(rawDate) : null;
+    if (!date || Number.isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('pt-BR', { month: 'short' });
+  };
+
+  const toNumber = (value: unknown) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+
   const ensureMonth = (key: string) => {
     if (!monthly[key]) {
       monthly[key] = {
@@ -1166,66 +1271,110 @@ export async function getAnalyticsData(clientId: number) {
         proposals: 0,
         dealsClosed: 0,
         averageTicket: 0,
+        reportRows: 0,
+        meetingRows: 0,
+        dealRows: 0,
       };
     }
     return monthly[key];
   };
 
   (reports.data || []).forEach((row: any) => {
-    const date = row.period_end ? new Date(row.period_end) : null;
-    const key = date && !Number.isNaN(date.getTime())
-      ? date.toLocaleDateString('pt-BR', { month: 'short' })
-      : 'N/A';
+    const key = toMonthKey(row.period_end);
     const bucket = ensureMonth(key);
     const metrics = (row.metrics || {}) as Record<string, number>;
-    bucket.leads += Number(metrics.leads || 0);
-    bucket.costPerLead += Number(metrics.costPerLead || metrics.cpl || 0);
-    bucket.activeCampaigns += Number(metrics.activeCampaigns || metrics.campaigns || 0);
-    bucket.conversionRate += Number(metrics.conversionRate || 0);
-    bucket.proposals += Number(metrics.proposals || 0);
-    bucket.dealsClosed += Number(metrics.dealsClosed || metrics.deals || 0);
-    bucket.averageTicket += Number(metrics.averageTicket || 0);
+    const leads = toNumber(metrics.leads);
+    const spend = toNumber(metrics.spend || metrics.adSpend);
+    const proposals = toNumber(metrics.proposals || metrics.proposalsSent);
+    const deals = toNumber(metrics.dealsClosed || metrics.deals);
+    const revenue = toNumber(metrics.revenue || metrics.salesRevenue);
+    const campaigns = toNumber(metrics.activeCampaigns || metrics.campaigns);
+
+    bucket.leads += leads;
+    bucket.costPerLead += spend > 0 && leads > 0 ? spend / leads : toNumber(metrics.costPerLead || metrics.cpl);
+    bucket.activeCampaigns += campaigns;
+    bucket.proposals += proposals;
+    bucket.dealsClosed += deals;
+    bucket.averageTicket += revenue > 0 && deals > 0 ? revenue / deals : toNumber(metrics.averageTicket);
+    bucket.reportRows += 1;
+  });
+
+  (marketingEntries.data || []).forEach((row: any) => {
+    const key = toMonthKey(row.period_date);
+    const bucket = ensureMonth(key);
+    const leads = toNumber(row.leads);
+    const spend = toNumber(row.spend);
+    const meetingsBooked = toNumber(row.meetings_booked);
+    const proposalsSent = toNumber(row.proposals_sent);
+    const dealsWon = toNumber(row.deals_won);
+    const revenue = toNumber(row.revenue);
+
+    bucket.leads += leads;
+    bucket.meetings += meetingsBooked;
+    bucket.proposals += proposalsSent;
+    bucket.dealsClosed += dealsWon;
+    bucket.activeCampaigns += 1;
+    bucket.costPerLead += spend > 0 && leads > 0 ? spend / leads : 0;
+    bucket.averageTicket += revenue > 0 && dealsWon > 0 ? revenue / dealsWon : 0;
   });
 
   (meetings.data || []).forEach((row: any) => {
-    const date = row.meeting_date ? new Date(row.meeting_date) : null;
-    if (!date || Number.isNaN(date.getTime())) return;
-    const key = date.toLocaleDateString('pt-BR', { month: 'short' });
+    const key = toMonthKey(row.meeting_date);
+    if (key === 'N/A') return;
     const bucket = ensureMonth(key);
     bucket.meetings += 1;
+    bucket.meetingRows += 1;
   });
 
   (tickets.data || []).forEach((row: any) => {
-    const date = row.created_at ? new Date(row.created_at) : null;
-    if (!date || Number.isNaN(date.getTime())) return;
-    const key = date.toLocaleDateString('pt-BR', { month: 'short' });
+    const key = toMonthKey(row.created_at);
+    if (key === 'N/A') return;
     const bucket = ensureMonth(key);
     if (row.status === 'resolved' || row.status === 'closed') {
       bucket.dealsClosed += 1;
+      bucket.dealRows += 1;
     }
     bucket.leads += 1;
   });
 
-  const marketing = Object.values(monthly).map((item: any) => ({
+  (dailyLogs.data || []).forEach((row: any) => {
+    const key = toMonthKey(row.log_date);
+    if (key === 'N/A') return;
+    const bucket = ensureMonth(key);
+    const progress = toNumber(row.progress_score);
+    // Project execution quality influences conversion tendency in service operations.
+    bucket.conversionRate += progress;
+  });
+
+  const orderedMonthly = Object.values(monthly) as any[];
+
+  const marketing = orderedMonthly.map((item: any) => {
+    const conversionBase = item.leads > 0 ? (item.dealsClosed / item.leads) * 100 : 0;
+    const opsSignal = (dailyLogs.data || []).length
+      ? item.conversionRate / (dailyLogs.data || []).length
+      : 0;
+
+    return {
+      period: item.period,
+      leads: Math.round(item.leads),
+      costPerLead: Number((item.costPerLead / Math.max(1, item.activeCampaigns || item.reportRows || 1)).toFixed(2)),
+      activeCampaigns: Math.round(item.activeCampaigns),
+      conversionRate: Number(Math.max(conversionBase, opsSignal).toFixed(2)),
+    };
+  });
+
+  const sales = orderedMonthly.map((item: any) => ({
     period: item.period,
-    leads: item.leads,
-    costPerLead: item.costPerLead,
-    activeCampaigns: item.activeCampaigns,
-    conversionRate: Number(item.conversionRate.toFixed(2)),
+    meetings: Math.round(item.meetings),
+    proposals: Math.round(item.proposals),
+    dealsClosed: Math.round(item.dealsClosed),
+    averageTicket: Number((item.averageTicket / Math.max(1, item.dealsClosed || item.dealRows || 1)).toFixed(2)),
   }));
 
-  const sales = Object.values(monthly).map((item: any) => ({
-    period: item.period,
-    meetings: item.meetings,
-    proposals: item.proposals,
-    dealsClosed: item.dealsClosed,
-    averageTicket: item.averageTicket,
-  }));
-
-  const correlation = Object.values(monthly).map((item: any) => ({
+  const correlation = orderedMonthly.map((item: any) => ({
     label: item.period,
-    leads: item.leads,
-    deals: item.dealsClosed,
+    leads: Math.round(item.leads),
+    deals: Math.round(item.dealsClosed),
   }));
 
   const funnel = (() => {

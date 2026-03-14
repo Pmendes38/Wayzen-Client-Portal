@@ -3,7 +3,7 @@ import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
 import { Sprint, SprintTask } from '@/types/domain';
-import { CalendarDays, Check, CheckCircle2, Circle, Edit2, Plus, X } from 'lucide-react';
+import { CalendarDays, Check, CheckCircle2, Circle, Edit2, Plus, Trash2, X } from 'lucide-react';
 
 export default function Sprints() {
   const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
@@ -119,9 +119,20 @@ export default function Sprints() {
   };
 
   const addTaskToSprint = async (sprintId: number) => {
-    if (!newTask.title.trim()) return;
+    if (!newTask.title.trim() || !activeClientId) return;
+
+    // Keep sprint activities reflected in Kanban by creating a linked backlog item first.
+    const backlogItem = await portalService.createSprintBacklogItem({
+      clientId: activeClientId,
+      sprintId,
+      title: newTask.title.trim(),
+      details: newTask.description || undefined,
+      occurredOn: new Date().toISOString().slice(0, 10),
+    });
+
     await portalService.createSprintTask({
       sprintId,
+      backlogItemId: (backlogItem as any)?.id,
       title: newTask.title.trim(),
       description: newTask.description,
     });
@@ -129,6 +140,32 @@ export default function Sprints() {
     setTasks((prev) => ({ ...prev, [sprintId]: data }));
     setNewTask({ title: '', description: '' });
     setAddingTaskToSprint(null);
+  };
+
+  const removeSprint = async (sprintId: number) => {
+    if (!isInternal || !activeClientId) return;
+    await portalService.deleteSprint(sprintId);
+    const data = await portalService.getSprints(activeClientId);
+    setSprints(data as Sprint[]);
+    setTasks((prev) => {
+      const next = { ...prev };
+      delete next[sprintId];
+      return next;
+    });
+    setExpanded((prev) => {
+      const next = { ...prev };
+      delete next[sprintId];
+      return next;
+    });
+  };
+
+  const removeTask = async (sprintId: number, taskId: number) => {
+    if (!isInternal) return;
+    await portalService.deleteSprintTask(taskId);
+    setTasks((prev) => ({
+      ...prev,
+      [sprintId]: (prev[sprintId] || []).filter((task) => task.id !== taskId),
+    }));
   };
 
   if (loading || loadingClients) return <PageLoader />;
@@ -228,9 +265,17 @@ export default function Sprints() {
                   </div>
                 </div>
               ) : (
-                <button
-                  className="w-full p-5 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800"
+                <div
+                  className="w-full p-5 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
                   onClick={() => toggleSprint(sprint.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggleSprint(sprint.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div>
                     <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">{sprint.name}</h3>
@@ -243,16 +288,25 @@ export default function Sprints() {
                   <div className="flex items-center gap-3">
                     <span className="text-sm font-semibold text-wayzen-700 dark:text-wayzen-300">{progress}%</span>
                     {isInternal && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); startEditSprint(sprint); }}
-                        className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500"
-                        aria-label="Editar sprint"
-                      >
-                        <Edit2 size={14} />
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startEditSprint(sprint); }}
+                          className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500"
+                          aria-label="Editar sprint"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeSprint(sprint.id).catch(console.error); }}
+                          className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500"
+                          aria-label="Excluir sprint"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
                     )}
                   </div>
-                </button>
+                </div>
               )}
 
               {expanded[sprint.id] && !isEditing && (
@@ -315,13 +369,22 @@ export default function Sprints() {
                               {task.title}
                             </span>
                             {isInternal && (
-                              <button
-                                onClick={() => startEditTask(task)}
-                                className="shrink-0 p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-300 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-400 transition-colors"
-                                aria-label="Editar atividade"
-                              >
-                                <Edit2 size={12} />
-                              </button>
+                              <div className="shrink-0 flex items-center gap-1">
+                                <button
+                                  onClick={() => startEditTask(task)}
+                                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-300 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-400 transition-colors"
+                                  aria-label="Editar atividade"
+                                >
+                                  <Edit2 size={12} />
+                                </button>
+                                <button
+                                  onClick={() => removeTask(sprint.id, task.id).catch(console.error)}
+                                  className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                                  aria-label="Excluir atividade"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
                             )}
                           </>
                         )}
