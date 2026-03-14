@@ -19,6 +19,7 @@ import {
   ScrollText,
 } from 'lucide-react';
 import AnalyticsDashboard from '@/components/reports/AnalyticsDashboard';
+import MarketingDataPanel from '@/components/reports/MarketingDataPanel';
 
 type ReportTab = 'analytics' | 'daily_logs' | 'published_reports';
 
@@ -461,10 +462,13 @@ export default function Reports() {
       </div>
 
       {activeTab === 'analytics' && (
-        <AnalyticsDashboard
-          data={analyticsData}
-          onNavigateToDailyLog={() => setActiveTab('daily_logs')}
-        />
+        <div className="space-y-6">
+          <AnalyticsDashboard
+            data={analyticsData}
+            onNavigateToDailyLog={() => setActiveTab('daily_logs')}
+          />
+          <MarketingDataPanel embedded />
+        </div>
       )}
 
       {activeTab === 'daily_logs' && (
