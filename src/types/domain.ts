@@ -229,6 +229,90 @@ export interface MarketingSalesAnalytics {
   sales: SalesMetricPoint[];
   correlation: CorrelationMetricPoint[];
   funnel: FunnelStagePoint[];
+  strategic: {
+    today: StrategicAnalyticsView;
+    week: StrategicAnalyticsView;
+    month: StrategicAnalyticsView;
+  };
+  trends: {
+    weekOverWeekConversion: Array<{ label: string; value: number }>;
+    beforeAfterWayzen: Array<{ label: string; before: number; after: number }>;
+  };
+}
+
+export interface StrategicAnalyticsView {
+  slaFirstResponseMinutes: number;
+  leadsToday: number;
+  leadsUnanswered: number;
+  opportunitiesOpen: number;
+  opportunitiesByStage: {
+    contatoInicial: number;
+    qualificado: number;
+    propostaEnviada: number;
+    negociacao: number;
+    fechado: number;
+  };
+  followUpsDone: number;
+  followUpsOverdue: number;
+  conversionRateWeek: number;
+  enrollmentsMonth: number;
+  loaRevenueMonth: number;
+  avgTicket: number;
+  monthlyGoal: number;
+  monthlyRealized: number;
+  churnMonth: number;
+  delinquencyRate: number;
+  nps: number;
+  wayzenActivitiesToday: number;
+  weekOverWeekConversionVar: number;
+  baseline: {
+    conversionRate: number;
+    monthlyRevenue: number;
+    avgTicket: number;
+  };
+  current: {
+    conversionRate: number;
+    monthlyRevenue: number;
+    avgTicket: number;
+  };
+}
+
+export interface DailyOperationalSnapshot {
+  id: number;
+  client_id: number;
+  snapshot_date: string;
+  sla_first_response_minutes: number;
+  leads_whatsapp: number;
+  leads_instagram: number;
+  leads_site: number;
+  leads_referral: number;
+  leads_unanswered: number;
+  opportunities_contato_inicial: number;
+  opportunities_qualificado: number;
+  opportunities_proposta_enviada: number;
+  opportunities_negociacao: number;
+  opportunities_fechado: number;
+  followups_done: number;
+  followups_overdue: number;
+  conversion_rate_week: number;
+  enrollments_month: number;
+  loa_revenue_month: number;
+  avg_ticket: number;
+  monthly_goal: number;
+  monthly_realized: number;
+  churn_month: number;
+  delinquency_rate: number;
+  nps_weekly: number;
+  wayzen_activities_today: number;
+  wow_conversion_var: number;
+  baseline_conversion_rate: number;
+  baseline_monthly_revenue: number;
+  baseline_avg_ticket: number;
+  current_conversion_rate: number;
+  current_monthly_revenue: number;
+  current_avg_ticket: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MarketingDataEntry {

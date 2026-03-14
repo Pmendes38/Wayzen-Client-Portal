@@ -874,6 +874,95 @@ export async function createDailyLog(payload: {
   return data;
 }
 
+export async function getDailyOperationalSnapshots(clientId: number) {
+  const { data, error } = await supabase
+    .from('daily_operational_snapshots')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('snapshot_date', { ascending: false })
+    .limit(120);
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function upsertDailyOperationalSnapshot(payload: {
+  clientId: number;
+  snapshotDate: string;
+  slaFirstResponseMinutes: number;
+  leadsWhatsapp: number;
+  leadsInstagram: number;
+  leadsSite: number;
+  leadsReferral: number;
+  leadsUnanswered: number;
+  opportunitiesContatoInicial: number;
+  opportunitiesQualificado: number;
+  opportunitiesPropostaEnviada: number;
+  opportunitiesNegociacao: number;
+  opportunitiesFechado: number;
+  followupsDone: number;
+  followupsOverdue: number;
+  conversionRateWeek: number;
+  enrollmentsMonth: number;
+  loaRevenueMonth: number;
+  avgTicket: number;
+  monthlyGoal: number;
+  monthlyRealized: number;
+  churnMonth: number;
+  delinquencyRate: number;
+  npsWeekly: number;
+  wayzenActivitiesToday: number;
+  wowConversionVar: number;
+  baselineConversionRate: number;
+  baselineMonthlyRevenue: number;
+  baselineAvgTicket: number;
+  currentConversionRate: number;
+  currentMonthlyRevenue: number;
+  currentAvgTicket: number;
+}) {
+  const { data, error } = await supabase
+    .from('daily_operational_snapshots')
+    .upsert({
+      client_id: payload.clientId,
+      snapshot_date: payload.snapshotDate,
+      sla_first_response_minutes: payload.slaFirstResponseMinutes,
+      leads_whatsapp: payload.leadsWhatsapp,
+      leads_instagram: payload.leadsInstagram,
+      leads_site: payload.leadsSite,
+      leads_referral: payload.leadsReferral,
+      leads_unanswered: payload.leadsUnanswered,
+      opportunities_contato_inicial: payload.opportunitiesContatoInicial,
+      opportunities_qualificado: payload.opportunitiesQualificado,
+      opportunities_proposta_enviada: payload.opportunitiesPropostaEnviada,
+      opportunities_negociacao: payload.opportunitiesNegociacao,
+      opportunities_fechado: payload.opportunitiesFechado,
+      followups_done: payload.followupsDone,
+      followups_overdue: payload.followupsOverdue,
+      conversion_rate_week: payload.conversionRateWeek,
+      enrollments_month: payload.enrollmentsMonth,
+      loa_revenue_month: payload.loaRevenueMonth,
+      avg_ticket: payload.avgTicket,
+      monthly_goal: payload.monthlyGoal,
+      monthly_realized: payload.monthlyRealized,
+      churn_month: payload.churnMonth,
+      delinquency_rate: payload.delinquencyRate,
+      nps_weekly: payload.npsWeekly,
+      wayzen_activities_today: payload.wayzenActivitiesToday,
+      wow_conversion_var: payload.wowConversionVar,
+      baseline_conversion_rate: payload.baselineConversionRate,
+      baseline_monthly_revenue: payload.baselineMonthlyRevenue,
+      baseline_avg_ticket: payload.baselineAvgTicket,
+      current_conversion_rate: payload.currentConversionRate,
+      current_monthly_revenue: payload.currentMonthlyRevenue,
+      current_avg_ticket: payload.currentAvgTicket,
+    }, { onConflict: 'client_id,snapshot_date' })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
 export async function getMeetingEvents(clientId: number) {
   const { data, error } = await supabase
     .from('meeting_events')
@@ -1213,7 +1302,7 @@ export async function deleteMarketingDataEntry(entryId: number) {
 }
 
 export async function getAnalyticsData(clientId: number) {
-  const [reports, dailyLogs, meetings, tickets, marketingEntries] = await Promise.all([
+  const [reports, dailyLogs, meetings, tickets, marketingEntries, snapshots] = await Promise.all([
     supabase
       .from('shared_reports')
       .select('period_end, metrics')
@@ -1239,6 +1328,12 @@ export async function getAnalyticsData(clientId: number) {
       .select('period_date, spend, leads, meetings_booked, proposals_sent, deals_won, revenue, channel, impressions, clicks')
       .eq('client_id', clientId)
       .order('period_date', { ascending: true }),
+    supabase
+      .from('daily_operational_snapshots')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('snapshot_date', { ascending: false })
+      .limit(120),
   ]);
 
   if (reports.error) throw reports.error;
@@ -1246,6 +1341,7 @@ export async function getAnalyticsData(clientId: number) {
   if (meetings.error) throw meetings.error;
   if (tickets.error) throw tickets.error;
   if (marketingEntries.error) throw marketingEntries.error;
+  if (snapshots.error) throw snapshots.error;
 
   const monthly: Record<string, any> = {};
   const toMonthKey = (rawDate?: string | null) => {
@@ -1395,11 +1491,118 @@ export async function getAnalyticsData(clientId: number) {
     ];
   })();
 
+  const snapshotRows = (snapshots.data || []) as any[];
+  const latest = snapshotRows[0] || null;
+  const now = new Date();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 6);
+
+  const inCurrentMonth = (isoDate?: string | null) => {
+    if (!isoDate) return false;
+    const d = new Date(isoDate);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  };
+
+  const snapshotWeek = snapshotRows.filter((row) => {
+    const d = new Date(row.snapshot_date);
+    return d >= weekAgo && d <= now;
+  });
+
+  const snapshotMonth = snapshotRows.filter((row) => inCurrentMonth(row.snapshot_date));
+
+  const sum = (rows: any[], key: string) => rows.reduce((acc, row) => acc + Number(row[key] || 0), 0);
+  const avg = (rows: any[], key: string) => rows.length ? sum(rows, key) / rows.length : 0;
+
+  const toView = (rows: any[], fallback?: any) => {
+    const source = rows.length ? rows : (fallback ? [fallback] : []);
+    const latestRow = source[0] || null;
+
+    const contatoInicial = Math.round(avg(source, 'opportunities_contato_inicial'));
+    const qualificado = Math.round(avg(source, 'opportunities_qualificado'));
+    const propostaEnviada = Math.round(avg(source, 'opportunities_proposta_enviada'));
+    const negociacao = Math.round(avg(source, 'opportunities_negociacao'));
+    const fechado = Math.round(avg(source, 'opportunities_fechado'));
+
+    return {
+      slaFirstResponseMinutes: Number(avg(source, 'sla_first_response_minutes').toFixed(2)),
+      leadsToday: Math.round(sum(source, 'leads_whatsapp') + sum(source, 'leads_instagram') + sum(source, 'leads_site') + sum(source, 'leads_referral')),
+      leadsUnanswered: Math.round(avg(source, 'leads_unanswered')),
+      opportunitiesOpen: contatoInicial + qualificado + propostaEnviada + negociacao + fechado,
+      opportunitiesByStage: {
+        contatoInicial,
+        qualificado,
+        propostaEnviada,
+        negociacao,
+        fechado,
+      },
+      followUpsDone: Math.round(sum(source, 'followups_done')),
+      followUpsOverdue: Math.round(avg(source, 'followups_overdue')),
+      conversionRateWeek: Number(avg(source, 'conversion_rate_week').toFixed(2)),
+      enrollmentsMonth: Math.round(avg(source, 'enrollments_month')),
+      loaRevenueMonth: Number(avg(source, 'loa_revenue_month').toFixed(2)),
+      avgTicket: Number(avg(source, 'avg_ticket').toFixed(2)),
+      monthlyGoal: Number(avg(source, 'monthly_goal').toFixed(2)),
+      monthlyRealized: Number(avg(source, 'monthly_realized').toFixed(2)),
+      churnMonth: Math.round(avg(source, 'churn_month')),
+      delinquencyRate: Number(avg(source, 'delinquency_rate').toFixed(2)),
+      nps: Number(avg(source, 'nps_weekly').toFixed(2)),
+      wayzenActivitiesToday: Math.round(sum(source, 'wayzen_activities_today')),
+      weekOverWeekConversionVar: Number(avg(source, 'wow_conversion_var').toFixed(2)),
+      baseline: {
+        conversionRate: Number(latestRow?.baseline_conversion_rate || 0),
+        monthlyRevenue: Number(latestRow?.baseline_monthly_revenue || 0),
+        avgTicket: Number(latestRow?.baseline_avg_ticket || 0),
+      },
+      current: {
+        conversionRate: Number(latestRow?.current_conversion_rate || 0),
+        monthlyRevenue: Number(latestRow?.current_monthly_revenue || 0),
+        avgTicket: Number(latestRow?.current_avg_ticket || 0),
+      },
+    };
+  };
+
+  const strategic = {
+    today: toView(latest ? [latest] : []),
+    week: toView(snapshotWeek, latest),
+    month: toView(snapshotMonth, latest),
+  };
+
+  const weekOverWeekConversion = snapshotRows
+    .slice()
+    .reverse()
+    .map((row) => ({
+      label: new Date(row.snapshot_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      value: Number(row.conversion_rate_week || 0),
+    }));
+
+  const beforeAfterWayzen = [
+    {
+      label: 'Conversao (%)',
+      before: Number(strategic.today.baseline.conversionRate || 0),
+      after: Number(strategic.today.current.conversionRate || 0),
+    },
+    {
+      label: 'Receita mensal',
+      before: Number(strategic.today.baseline.monthlyRevenue || 0),
+      after: Number(strategic.today.current.monthlyRevenue || 0),
+    },
+    {
+      label: 'Ticket medio',
+      before: Number(strategic.today.baseline.avgTicket || 0),
+      after: Number(strategic.today.current.avgTicket || 0),
+    },
+  ];
+
   return {
     marketing,
     sales,
     correlation,
     funnel,
+    strategic,
+    trends: {
+      weekOverWeekConversion,
+      beforeAfterWayzen,
+    },
   };
 }
 

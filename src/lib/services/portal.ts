@@ -125,6 +125,41 @@ export const portalService = {
     blockers?: string;
     nextSteps?: string;
   }) => queries.createDailyLog(payload),
+  getDailyOperationalSnapshots: (clientId: number) => queries.getDailyOperationalSnapshots(clientId),
+  upsertDailyOperationalSnapshot: (payload: {
+    clientId: number;
+    snapshotDate: string;
+    slaFirstResponseMinutes: number;
+    leadsWhatsapp: number;
+    leadsInstagram: number;
+    leadsSite: number;
+    leadsReferral: number;
+    leadsUnanswered: number;
+    opportunitiesContatoInicial: number;
+    opportunitiesQualificado: number;
+    opportunitiesPropostaEnviada: number;
+    opportunitiesNegociacao: number;
+    opportunitiesFechado: number;
+    followupsDone: number;
+    followupsOverdue: number;
+    conversionRateWeek: number;
+    enrollmentsMonth: number;
+    loaRevenueMonth: number;
+    avgTicket: number;
+    monthlyGoal: number;
+    monthlyRealized: number;
+    churnMonth: number;
+    delinquencyRate: number;
+    npsWeekly: number;
+    wayzenActivitiesToday: number;
+    wowConversionVar: number;
+    baselineConversionRate: number;
+    baselineMonthlyRevenue: number;
+    baselineAvgTicket: number;
+    currentConversionRate: number;
+    currentMonthlyRevenue: number;
+    currentAvgTicket: number;
+  }) => queries.upsertDailyOperationalSnapshot(payload),
 
   getMeetingEvents: (clientId: number) => queries.getMeetingEvents(clientId),
   createMeetingEvent: (payload: {

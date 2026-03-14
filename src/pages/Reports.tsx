@@ -5,6 +5,7 @@ import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
 import {
   DailyLog,
+  DailyOperationalSnapshot,
   MarketingSalesAnalytics,
   SharedReport,
 } from '@/types/domain';
@@ -38,7 +39,77 @@ export default function Reports() {
     sales: [],
     correlation: [],
     funnel: [],
+    strategic: {
+      today: {
+        slaFirstResponseMinutes: 0,
+        leadsToday: 0,
+        leadsUnanswered: 0,
+        opportunitiesOpen: 0,
+        opportunitiesByStage: { contatoInicial: 0, qualificado: 0, propostaEnviada: 0, negociacao: 0, fechado: 0 },
+        followUpsDone: 0,
+        followUpsOverdue: 0,
+        conversionRateWeek: 0,
+        enrollmentsMonth: 0,
+        loaRevenueMonth: 0,
+        avgTicket: 0,
+        monthlyGoal: 0,
+        monthlyRealized: 0,
+        churnMonth: 0,
+        delinquencyRate: 0,
+        nps: 0,
+        wayzenActivitiesToday: 0,
+        weekOverWeekConversionVar: 0,
+        baseline: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+        current: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+      },
+      week: {
+        slaFirstResponseMinutes: 0,
+        leadsToday: 0,
+        leadsUnanswered: 0,
+        opportunitiesOpen: 0,
+        opportunitiesByStage: { contatoInicial: 0, qualificado: 0, propostaEnviada: 0, negociacao: 0, fechado: 0 },
+        followUpsDone: 0,
+        followUpsOverdue: 0,
+        conversionRateWeek: 0,
+        enrollmentsMonth: 0,
+        loaRevenueMonth: 0,
+        avgTicket: 0,
+        monthlyGoal: 0,
+        monthlyRealized: 0,
+        churnMonth: 0,
+        delinquencyRate: 0,
+        nps: 0,
+        wayzenActivitiesToday: 0,
+        weekOverWeekConversionVar: 0,
+        baseline: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+        current: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+      },
+      month: {
+        slaFirstResponseMinutes: 0,
+        leadsToday: 0,
+        leadsUnanswered: 0,
+        opportunitiesOpen: 0,
+        opportunitiesByStage: { contatoInicial: 0, qualificado: 0, propostaEnviada: 0, negociacao: 0, fechado: 0 },
+        followUpsDone: 0,
+        followUpsOverdue: 0,
+        conversionRateWeek: 0,
+        enrollmentsMonth: 0,
+        loaRevenueMonth: 0,
+        avgTicket: 0,
+        monthlyGoal: 0,
+        monthlyRealized: 0,
+        churnMonth: 0,
+        delinquencyRate: 0,
+        nps: 0,
+        wayzenActivitiesToday: 0,
+        weekOverWeekConversionVar: 0,
+        baseline: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+        current: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+      },
+    },
+    trends: { weekOverWeekConversion: [], beforeAfterWayzen: [] },
   });
+  const [snapshots, setSnapshots] = useState<DailyOperationalSnapshot[]>([]);
   const [activeTab, setActiveTab] = useState<ReportTab>('analytics');
   const [expanded, setExpanded] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -56,6 +127,38 @@ export default function Reports() {
     summary: '',
     blockers: '',
     nextSteps: '',
+  });
+  const [snapshotForm, setSnapshotForm] = useState({
+    slaFirstResponseMinutes: 0,
+    leadsWhatsapp: 0,
+    leadsInstagram: 0,
+    leadsSite: 0,
+    leadsReferral: 0,
+    leadsUnanswered: 0,
+    opportunitiesContatoInicial: 0,
+    opportunitiesQualificado: 0,
+    opportunitiesPropostaEnviada: 0,
+    opportunitiesNegociacao: 0,
+    opportunitiesFechado: 0,
+    followupsDone: 0,
+    followupsOverdue: 0,
+    conversionRateWeek: 0,
+    enrollmentsMonth: 0,
+    loaRevenueMonth: 0,
+    avgTicket: 0,
+    monthlyGoal: 0,
+    monthlyRealized: 0,
+    churnMonth: 0,
+    delinquencyRate: 0,
+    npsWeekly: 0,
+    wayzenActivitiesToday: 0,
+    wowConversionVar: 0,
+    baselineConversionRate: 0,
+    baselineMonthlyRevenue: 0,
+    baselineAvgTicket: 0,
+    currentConversionRate: 0,
+    currentMonthlyRevenue: 0,
+    currentAvgTicket: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -75,11 +178,13 @@ export default function Reports() {
       portalService.getReports(activeClientId),
       portalService.getDailyLogs(activeClientId),
       portalService.getAnalyticsData(activeClientId),
+      portalService.getDailyOperationalSnapshots(activeClientId),
     ])
-      .then(([reportData, logData, analytics]) => {
+      .then(([reportData, logData, analytics, snapshotData]) => {
         setReports(reportData);
         setDailyLogs(logData);
         setAnalyticsData(analytics as MarketingSalesAnalytics);
+        setSnapshots(snapshotData as DailyOperationalSnapshot[]);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -96,6 +201,10 @@ export default function Reports() {
       })),
     [dailyLogs]
   );
+
+  const updateSnapshotField = (field: keyof typeof snapshotForm, value: number) => {
+    setSnapshotForm((prev) => ({ ...prev, [field]: value }));
+  };
 
   const createReport = async () => {
     if (!isInternal || !clientId || !form.title || !form.periodStart || !form.periodEnd) return;
@@ -129,9 +238,17 @@ export default function Reports() {
       nextSteps: dailyLogForm.nextSteps || undefined,
     });
 
+    await portalService.upsertDailyOperationalSnapshot({
+      clientId,
+      snapshotDate: dailyLogForm.logDate,
+      ...snapshotForm,
+    });
+
     setDailyLogForm((prev) => ({ ...prev, summary: '', blockers: '', nextSteps: '' }));
     const refreshed = await portalService.getDailyLogs(clientId);
+    const refreshedSnapshots = await portalService.getDailyOperationalSnapshots(clientId);
     setDailyLogs(refreshed);
+    setSnapshots(refreshedSnapshots as DailyOperationalSnapshot[]);
     await refreshAnalytics(clientId);
   };
 
@@ -170,7 +287,7 @@ export default function Reports() {
         <section className="space-y-4">
           {isInternal && (
             <div className="card p-5 bg-white dark:bg-slate-900 dark:border-slate-700">
-              <h2 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Registro Diario (integrado aos Relatorios)</h2>
+              <h2 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Registro Diario + Planilha Operacional (sincroniza com Analytics)</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <input type="date" className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" value={dailyLogForm.logDate} onChange={(e) => setDailyLogForm((p) => ({ ...p, logDate: e.target.value }))} />
                 <input type="number" min={0} max={100} className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" value={dailyLogForm.progressScore} onChange={(e) => setDailyLogForm((p) => ({ ...p, progressScore: Number(e.target.value) }))} placeholder="Progresso 0-100" />
@@ -181,6 +298,45 @@ export default function Reports() {
                 <textarea className="input-field h-20 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" placeholder="Bloqueios" value={dailyLogForm.blockers} onChange={(e) => setDailyLogForm((p) => ({ ...p, blockers: e.target.value }))} />
                 <textarea className="input-field h-20 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" placeholder="Proximos passos" value={dailyLogForm.nextSteps} onChange={(e) => setDailyLogForm((p) => ({ ...p, nextSteps: e.target.value }))} />
               </div>
+
+              <div className="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Planilha de Indicadores do Dia</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Preencha uma vez por dia. Esses campos alimentam os graficos e cards da aba Analytics.</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-3">
+                  <input type="number" min={0} step="0.1" className="input-field" placeholder="SLA 1a resposta (min)" value={snapshotForm.slaFirstResponseMinutes} onChange={(e) => updateSnapshotField('slaFirstResponseMinutes', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Leads WhatsApp" value={snapshotForm.leadsWhatsapp} onChange={(e) => updateSnapshotField('leadsWhatsapp', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Leads Instagram" value={snapshotForm.leadsInstagram} onChange={(e) => updateSnapshotField('leadsInstagram', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Leads Site" value={snapshotForm.leadsSite} onChange={(e) => updateSnapshotField('leadsSite', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Leads Indicacao" value={snapshotForm.leadsReferral} onChange={(e) => updateSnapshotField('leadsReferral', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Leads sem resposta" value={snapshotForm.leadsUnanswered} onChange={(e) => updateSnapshotField('leadsUnanswered', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Funil: contato inicial" value={snapshotForm.opportunitiesContatoInicial} onChange={(e) => updateSnapshotField('opportunitiesContatoInicial', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Funil: qualificado" value={snapshotForm.opportunitiesQualificado} onChange={(e) => updateSnapshotField('opportunitiesQualificado', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Funil: proposta" value={snapshotForm.opportunitiesPropostaEnviada} onChange={(e) => updateSnapshotField('opportunitiesPropostaEnviada', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Funil: negociacao" value={snapshotForm.opportunitiesNegociacao} onChange={(e) => updateSnapshotField('opportunitiesNegociacao', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Funil: fechado" value={snapshotForm.opportunitiesFechado} onChange={(e) => updateSnapshotField('opportunitiesFechado', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Follow-ups realizados" value={snapshotForm.followupsDone} onChange={(e) => updateSnapshotField('followupsDone', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Follow-ups em atraso" value={snapshotForm.followupsOverdue} onChange={(e) => updateSnapshotField('followupsOverdue', Number(e.target.value))} />
+                  <input type="number" min={0} step="0.01" className="input-field" placeholder="Conversao semana (%)" value={snapshotForm.conversionRateWeek} onChange={(e) => updateSnapshotField('conversionRateWeek', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Matriculas no mes" value={snapshotForm.enrollmentsMonth} onChange={(e) => updateSnapshotField('enrollmentsMonth', Number(e.target.value))} />
+                  <input type="number" min={0} step="0.01" className="input-field" placeholder="LOA parcial (R$)" value={snapshotForm.loaRevenueMonth} onChange={(e) => updateSnapshotField('loaRevenueMonth', Number(e.target.value))} />
+                  <input type="number" min={0} step="0.01" className="input-field" placeholder="Ticket medio (R$)" value={snapshotForm.avgTicket} onChange={(e) => updateSnapshotField('avgTicket', Number(e.target.value))} />
+                  <input type="number" min={0} step="0.01" className="input-field" placeholder="Meta mensal (R$)" value={snapshotForm.monthlyGoal} onChange={(e) => updateSnapshotField('monthlyGoal', Number(e.target.value))} />
+                  <input type="number" min={0} step="0.01" className="input-field" placeholder="Realizado mensal (R$)" value={snapshotForm.monthlyRealized} onChange={(e) => updateSnapshotField('monthlyRealized', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Desistencias no mes" value={snapshotForm.churnMonth} onChange={(e) => updateSnapshotField('churnMonth', Number(e.target.value))} />
+                  <input type="number" min={0} step="0.01" className="input-field" placeholder="Inadimplencia (%)" value={snapshotForm.delinquencyRate} onChange={(e) => updateSnapshotField('delinquencyRate', Number(e.target.value))} />
+                  <input type="number" min={0} max={100} className="input-field" placeholder="NPS semanal" value={snapshotForm.npsWeekly} onChange={(e) => updateSnapshotField('npsWeekly', Number(e.target.value))} />
+                  <input type="number" min={0} className="input-field" placeholder="Atividades Wayzen hoje" value={snapshotForm.wayzenActivitiesToday} onChange={(e) => updateSnapshotField('wayzenActivitiesToday', Number(e.target.value))} />
+                  <input type="number" step="0.01" className="input-field" placeholder="Variacao WoW conversao (%)" value={snapshotForm.wowConversionVar} onChange={(e) => updateSnapshotField('wowConversionVar', Number(e.target.value))} />
+                  <input type="number" step="0.01" className="input-field" placeholder="Antes Wayzen: conversao (%)" value={snapshotForm.baselineConversionRate} onChange={(e) => updateSnapshotField('baselineConversionRate', Number(e.target.value))} />
+                  <input type="number" step="0.01" className="input-field" placeholder="Antes Wayzen: receita mensal" value={snapshotForm.baselineMonthlyRevenue} onChange={(e) => updateSnapshotField('baselineMonthlyRevenue', Number(e.target.value))} />
+                  <input type="number" step="0.01" className="input-field" placeholder="Antes Wayzen: ticket medio" value={snapshotForm.baselineAvgTicket} onChange={(e) => updateSnapshotField('baselineAvgTicket', Number(e.target.value))} />
+                  <input type="number" step="0.01" className="input-field" placeholder="Hoje: conversao (%)" value={snapshotForm.currentConversionRate} onChange={(e) => updateSnapshotField('currentConversionRate', Number(e.target.value))} />
+                  <input type="number" step="0.01" className="input-field" placeholder="Hoje: receita mensal" value={snapshotForm.currentMonthlyRevenue} onChange={(e) => updateSnapshotField('currentMonthlyRevenue', Number(e.target.value))} />
+                  <input type="number" step="0.01" className="input-field" placeholder="Hoje: ticket medio" value={snapshotForm.currentAvgTicket} onChange={(e) => updateSnapshotField('currentAvgTicket', Number(e.target.value))} />
+                </div>
+              </div>
+
               <button className="btn-primary mt-3" onClick={saveDailyLog}>Salvar registro diario</button>
             </div>
           )}
@@ -209,6 +365,49 @@ export default function Reports() {
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">
                 Ultimos {Math.min(10, dailyLogsChartData.length)} registros foram consolidados para alimentar os graficos de analytics.
               </p>
+            )}
+          </div>
+
+          <div className="card p-5 bg-white dark:bg-slate-900 dark:border-slate-700">
+            <h2 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Planilha Sincronizada de Indicadores</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Data</th>
+                    <th className="px-3 py-2 text-left">SLA (min)</th>
+                    <th className="px-3 py-2 text-left">Leads</th>
+                    <th className="px-3 py-2 text-left">Sem resposta</th>
+                    <th className="px-3 py-2 text-left">Follow-ups</th>
+                    <th className="px-3 py-2 text-left">Conversao semana</th>
+                    <th className="px-3 py-2 text-left">Matriculas mes</th>
+                    <th className="px-3 py-2 text-left">LOA parcial</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshots.map((row) => {
+                    const leads = Number(row.leads_whatsapp || 0) + Number(row.leads_instagram || 0) + Number(row.leads_site || 0) + Number(row.leads_referral || 0);
+                    return (
+                      <tr key={row.id} className="border-t border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300">
+                        <td className="px-3 py-2">{new Date(row.snapshot_date).toLocaleDateString('pt-BR')}</td>
+                        <td className="px-3 py-2">{Number(row.sla_first_response_minutes || 0).toFixed(1)}</td>
+                        <td className="px-3 py-2">{leads}</td>
+                        <td className="px-3 py-2">{row.leads_unanswered}</td>
+                        <td className="px-3 py-2">{row.followups_done}</td>
+                        <td className="px-3 py-2">{Number(row.conversion_rate_week || 0).toFixed(2)}%</td>
+                        <td className="px-3 py-2">{row.enrollments_month}</td>
+                        <td className="px-3 py-2">R$ {Number(row.loa_revenue_month || 0).toLocaleString('pt-BR')}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {!snapshots.length && (
+              <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-400 dark:border-slate-700 dark:text-slate-500 mt-3">
+                Nenhuma linha da planilha operacional foi registrada ainda.
+              </div>
             )}
           </div>
         </section>
