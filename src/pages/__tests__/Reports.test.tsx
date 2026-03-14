@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Reports from '@/pages/Reports';
+import { portalService } from '@/lib/services/portal';
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
@@ -136,6 +137,10 @@ vi.mock('@/lib/services/portal', () => ({
 }));
 
 describe('Reports hub', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renderiza abas internas de analytics, registro diario e relatorios publicados', async () => {
     render(<Reports />);
 
@@ -149,5 +154,201 @@ describe('Reports hub', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Registro Diario/i }));
     expect(screen.getByText(/Historico de Operacao/i)).toBeInTheDocument();
+  });
+
+  it('mostra empty state nos graficos e navega para Registro Diario pelo CTA', async () => {
+    vi.mocked(portalService.getAnalyticsData).mockResolvedValueOnce({
+      marketing: [],
+      sales: [],
+      correlation: [],
+      funnel: [],
+      strategic: {
+        today: {
+          slaFirstResponseMinutes: 0,
+          leadsToday: 0,
+          leadsUnanswered: 0,
+          opportunitiesOpen: 0,
+          opportunitiesByStage: { contatoInicial: 0, qualificado: 0, propostaEnviada: 0, negociacao: 0, fechado: 0 },
+          followUpsDone: 0,
+          followUpsOverdue: 0,
+          conversionRateWeek: 0,
+          enrollmentsMonth: 0,
+          loaRevenueMonth: 0,
+          avgTicket: 0,
+          monthlyGoal: 0,
+          monthlyRealized: 0,
+          churnMonth: 0,
+          delinquencyRate: 0,
+          nps: 0,
+          wayzenActivitiesToday: 0,
+          weekOverWeekConversionVar: 0,
+          baseline: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+          current: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+        },
+        week: {
+          slaFirstResponseMinutes: 0,
+          leadsToday: 0,
+          leadsUnanswered: 0,
+          opportunitiesOpen: 0,
+          opportunitiesByStage: { contatoInicial: 0, qualificado: 0, propostaEnviada: 0, negociacao: 0, fechado: 0 },
+          followUpsDone: 0,
+          followUpsOverdue: 0,
+          conversionRateWeek: 0,
+          enrollmentsMonth: 0,
+          loaRevenueMonth: 0,
+          avgTicket: 0,
+          monthlyGoal: 0,
+          monthlyRealized: 0,
+          churnMonth: 0,
+          delinquencyRate: 0,
+          nps: 0,
+          wayzenActivitiesToday: 0,
+          weekOverWeekConversionVar: 0,
+          baseline: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+          current: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+        },
+        month: {
+          slaFirstResponseMinutes: 0,
+          leadsToday: 0,
+          leadsUnanswered: 0,
+          opportunitiesOpen: 0,
+          opportunitiesByStage: { contatoInicial: 0, qualificado: 0, propostaEnviada: 0, negociacao: 0, fechado: 0 },
+          followUpsDone: 0,
+          followUpsOverdue: 0,
+          conversionRateWeek: 0,
+          enrollmentsMonth: 0,
+          loaRevenueMonth: 0,
+          avgTicket: 0,
+          monthlyGoal: 0,
+          monthlyRealized: 0,
+          churnMonth: 0,
+          delinquencyRate: 0,
+          nps: 0,
+          wayzenActivitiesToday: 0,
+          weekOverWeekConversionVar: 0,
+          baseline: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+          current: { conversionRate: 0, monthlyRevenue: 0, avgTicket: 0 },
+        },
+      },
+      trends: {
+        weekOverWeekConversion: [],
+        beforeAfterWayzen: [],
+      },
+    });
+
+    render(<Reports />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Nenhum dado registrado ainda. Preencha o Registro Diario para visualizar./i).length).toBeGreaterThan(0);
+    });
+
+    const ctaButtons = screen.getAllByRole('button', { name: /Ir para Registro Diario/i });
+    fireEvent.click(ctaButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Historico de Operacao/i)).toBeInTheDocument();
+    });
+  });
+
+  it('preenche metricas automaticamente ao selecionar periodo em Relatorios Publicados', async () => {
+    vi.mocked(portalService.getDailyOperationalSnapshots).mockResolvedValueOnce([
+      {
+        id: 200,
+        client_id: 1,
+        snapshot_date: '2026-03-10',
+        sla_first_response_minutes: 4,
+        leads_whatsapp: 10,
+        leads_instagram: 5,
+        leads_site: 3,
+        leads_referral: 2,
+        leads_unanswered: 2,
+        opportunities_contato_inicial: 5,
+        opportunities_qualificado: 4,
+        opportunities_proposta_enviada: 3,
+        opportunities_negociacao: 2,
+        opportunities_fechado: 1,
+        followups_done: 6,
+        followups_overdue: 1,
+        conversion_rate_week: 12.5,
+        enrollments_month: 4,
+        loa_revenue_month: 20000,
+        avg_ticket: 5000,
+        monthly_goal: 50000,
+        monthly_realized: 22000,
+        churn_month: 1,
+        delinquency_rate: 6,
+        nps_weekly: 72,
+        wayzen_activities_today: 12,
+        wow_conversion_var: 1.2,
+        baseline_conversion_rate: 7,
+        baseline_monthly_revenue: 18000,
+        baseline_avg_ticket: 4500,
+        current_conversion_rate: 12.5,
+        current_monthly_revenue: 22000,
+        current_avg_ticket: 5000,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 201,
+        client_id: 1,
+        snapshot_date: '2026-03-12',
+        sla_first_response_minutes: 6,
+        leads_whatsapp: 8,
+        leads_instagram: 4,
+        leads_site: 2,
+        leads_referral: 1,
+        leads_unanswered: 1,
+        opportunities_contato_inicial: 4,
+        opportunities_qualificado: 3,
+        opportunities_proposta_enviada: 2,
+        opportunities_negociacao: 2,
+        opportunities_fechado: 1,
+        followups_done: 5,
+        followups_overdue: 1,
+        conversion_rate_week: 10.5,
+        enrollments_month: 3,
+        loa_revenue_month: 18000,
+        avg_ticket: 4500,
+        monthly_goal: 50000,
+        monthly_realized: 21000,
+        churn_month: 1,
+        delinquency_rate: 5,
+        nps_weekly: 70,
+        wayzen_activities_today: 10,
+        wow_conversion_var: 0.9,
+        baseline_conversion_rate: 7,
+        baseline_monthly_revenue: 18000,
+        baseline_avg_ticket: 4500,
+        current_conversion_rate: 10.5,
+        current_monthly_revenue: 21000,
+        current_avg_ticket: 4500,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ]);
+
+    render(<Reports />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Relatorios Publicados/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Relatorios Publicados/i }));
+
+    fireEvent.change(screen.getByLabelText(/Periodo inicial/i), {
+      target: { value: '2026-03-10' },
+    });
+    fireEvent.change(screen.getByLabelText(/Periodo final/i), {
+      target: { value: '2026-03-12' },
+    });
+
+    await waitFor(() => {
+      const metricsInput = screen.getByLabelText(/Metricas-chave/i) as HTMLInputElement;
+      const summaryTextarea = screen.getByLabelText(/Resumo executivo e entregas/i) as HTMLTextAreaElement;
+      expect(metricsInput.value).toContain('SLA (min):');
+      expect(metricsInput.value).toContain('Leads:');
+      expect(summaryTextarea.value).toContain('Resumo sugerido para 2 dia(s)');
+    });
   });
 });
