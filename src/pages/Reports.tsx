@@ -288,6 +288,11 @@ export default function Reports() {
     ].join(' | ');
   };
 
+  const buildAutoDailySummary = () => {
+    const totalLeads = snapshotForm.leadsWhatsapp + snapshotForm.leadsInstagram + snapshotForm.leadsSite + snapshotForm.leadsReferral;
+    return `Registro automatico: SLA ${snapshotForm.slaFirstResponseMinutes.toFixed(1)} min, leads ${totalLeads}, conversao semana ${snapshotForm.conversionRateWeek.toFixed(2)}%, matriculas ${snapshotForm.enrollmentsMonth}.`;
+  };
+
   useEffect(() => {
     const start = toDateValue(form.periodStart);
     const end = toDateValue(form.periodEnd);
@@ -371,14 +376,16 @@ export default function Reports() {
   };
 
   const saveDailyLog = async () => {
-    if (!isInternal || !clientId || !dailyLogForm.summary.trim()) return;
+    if (!isInternal || !clientId) return;
+
+    const summary = dailyLogForm.summary.trim() || buildAutoDailySummary();
 
     await portalService.createDailyLog({
       clientId,
       logDate: dailyLogForm.logDate,
       progressScore: Number(dailyLogForm.progressScore),
       hoursWorked: Number(dailyLogForm.hoursWorked),
-      summary: dailyLogForm.summary,
+      summary,
       blockers: dailyLogForm.blockers || undefined,
       nextSteps: dailyLogForm.nextSteps || undefined,
     });
