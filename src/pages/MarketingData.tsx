@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Trash2, Plus, Megaphone } from 'lucide-react';
 import { usePortalScope } from '@/hooks/usePortalScope';
+import { useAuth } from '@/hooks/useAuth';
 import { portalService } from '@/lib/services/portal';
 import { MarketingDataEntry } from '@/types/domain';
 import PageLoader from '@/components/PageLoader';
@@ -21,6 +22,7 @@ const emptyForm = {
 };
 
 export default function MarketingData() {
+  const { user } = useAuth();
   const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
   const [entries, setEntries] = useState<MarketingDataEntry[]>([]);
   const [form, setForm] = useState(emptyForm);
@@ -29,8 +31,8 @@ export default function MarketingData() {
   const [loading, setLoading] = useState(true);
 
   const loadEntries = async () => {
-    if (!activeClientId) return;
-    const data = await portalService.getMarketingDataEntries(activeClientId);
+    if (!user?.id) return;
+    const data = await portalService.getMarketingDataEntries(user.id);
     setEntries(data as MarketingDataEntry[]);
   };
 
@@ -61,7 +63,7 @@ export default function MarketingData() {
 
     try {
       await portalService.createMarketingDataEntry({
-        clientId: activeClientId,
+        userId: user?.id || 0,
         periodDate: form.periodDate,
         channel: form.channel.trim() || 'Nao informado',
         campaignName: form.campaignName.trim(),

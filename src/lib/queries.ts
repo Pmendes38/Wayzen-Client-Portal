@@ -8,7 +8,7 @@ export async function getCurrentUser() {
   const uid = user.id;
   let baseQuery = supabase
     .from('users')
-    .select('id, email, name, role, client_id, phone, avatar_url, created_at')
+    .select('id, auth_user_id, email, name, role, client_id, phone, avatar_url, created_at')
     .eq('auth_user_id', uid)
     .maybeSingle();
 
@@ -17,7 +17,7 @@ export async function getCurrentUser() {
   if (!userData && user.email) {
     const fallback = await supabase
       .from('users')
-      .select('id, email, name, role, client_id, phone, avatar_url, created_at')
+      .select('id, auth_user_id, email, name, role, client_id, phone, avatar_url, created_at')
       .eq('email', user.email)
       .single();
     userData = fallback.data;
@@ -831,20 +831,28 @@ export async function createReport(reportData: {
   return data;
 }
 
-export async function getDailyLogs(clientId: number) {
+export async function getDailyLogs(_userId: number) {
+  const user = await getCurrentUser();
+  if (!user?.auth_user_id) throw new Error('Usuário não autenticado');
+
   const { data, error } = await supabase
     .from('daily_logs')
     .select('*')
-    .eq('client_id', clientId)
-    .order('log_date', { ascending: false })
+    .eq('user_id', user.auth_user_id)
+    .order('date', { ascending: false })
     .limit(30);
 
   if (error) throw error;
-  return data;
+
+  return (data || []).map((row: any) => ({
+    ...row,
+    log_date: row.date,
+    progress_score: Number(row.progress || 0),
+  }));
 }
 
 export async function createDailyLog(payload: {
-  clientId: number;
+  userId: number;
   logDate: string;
   progressScore: number;
   hoursWorked: number;
@@ -853,28 +861,31 @@ export async function createDailyLog(payload: {
   nextSteps?: string;
 }) {
   const user = await getCurrentUser();
-  if (!user) throw new Error('Usuário não autenticado');
+  if (!user?.auth_user_id) throw new Error('Usuário não autenticado');
 
   const { data, error } = await supabase
     .from('daily_logs')
     .upsert(
       {
-        client_id: payload.clientId,
-        consultant_user_id: user.id,
-        log_date: payload.logDate,
-        progress_score: payload.progressScore,
+        user_id: user.auth_user_id,
+        date: payload.logDate,
+        progress: payload.progressScore,
         hours_worked: payload.hoursWorked,
         summary: payload.summary,
         blockers: payload.blockers,
         next_steps: payload.nextSteps,
       },
-      { onConflict: 'client_id,consultant_user_id,log_date' }
+      { onConflict: 'user_id,date' }
     )
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return {
+    ...data,
+    log_date: data.date,
+    progress_score: Number(data.progress || 0),
+  };
 }
 
 export async function getDailyOperationalSnapshots(clientId: number) {
@@ -1244,20 +1255,41 @@ export async function syncProjectCalendarEvents(clientId: number, events: Array<
   if (upsertError) throw upsertError;
 }
 
-export async function getMarketingDataEntries(clientId: number) {
+export async function getMarketingDataEntries(_userId: number) {
+  const user = await getCurrentUser();
+  if (!user?.auth_user_id) throw new Error('Usuário não autenticado');
+
   const { data, error } = await supabase
-    .from('marketing_data_entries')
-    .select('*')
-    .eq('client_id', clientId)
-    .order('period_date', { ascending: false })
+    .from('daily_logs')
+    .select('id, user_id, date, progress, hours_worked, summary, blockers, next_steps, created_at')
+    .eq('user_id', user.auth_user_id)
+    .order('date', { ascending: false })
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+
+  // Keep compatibility with MarketingData page while persisting to daily_logs.
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    user_id: row.user_id,
+    period_date: row.date,
+    channel: 'Operacional',
+    campaign_name: row.summary || 'Registro diario',
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+    leads: Number(row.progress || 0),
+    meetings_booked: 0,
+    proposals_sent: 0,
+    deals_won: 0,
+    revenue: 0,
+    notes: [row.blockers, row.next_steps].filter(Boolean).join(' | ') || null,
+    created_at: row.created_at,
+  }));
 }
 
 export async function createMarketingDataEntry(payload: {
-  clientId: number;
+  userId: number;
   periodDate: string;
   channel: string;
   campaignName: string;
@@ -1271,33 +1303,59 @@ export async function createMarketingDataEntry(payload: {
   revenue: number;
   notes?: string;
 }) {
+  const user = await getCurrentUser();
+  if (!user?.auth_user_id) throw new Error('Usuário não autenticado');
+
+  const progressScore = Number.isFinite(Number(payload.leads))
+    ? Math.max(0, Math.min(100, Number(payload.leads)))
+    : 0;
+
+  const summary = [
+    payload.campaignName,
+    payload.channel,
+    `Investimento R$ ${Number(payload.spend || 0).toFixed(2)}`,
+    `Leads ${Number(payload.leads || 0)}`,
+    `Propostas ${Number(payload.proposalsSent || 0)}`,
+    `Negocios ${Number(payload.dealsWon || 0)}`,
+  ].join(' | ');
+
   const { data, error } = await supabase
-    .from('marketing_data_entries')
-    .insert({
-      client_id: payload.clientId,
-      period_date: payload.periodDate,
-      channel: payload.channel,
-      campaign_name: payload.campaignName,
-      spend: payload.spend,
-      impressions: payload.impressions,
-      clicks: payload.clicks,
-      leads: payload.leads,
-      meetings_booked: payload.meetingsBooked,
-      proposals_sent: payload.proposalsSent,
-      deals_won: payload.dealsWon,
-      revenue: payload.revenue,
-      notes: payload.notes || null,
-    })
-    .select('*')
+    .from('daily_logs')
+    .upsert({
+      user_id: user.auth_user_id,
+      date: payload.periodDate,
+      progress: progressScore,
+      hours_worked: 0,
+      summary,
+      blockers: payload.notes || null,
+      next_steps: null,
+    }, { onConflict: 'user_id,date' })
+    .select('id, user_id, date, progress, created_at, summary, blockers, next_steps')
     .single();
 
   if (error) throw error;
-  return data;
+  return {
+    id: data.id,
+    user_id: data.user_id,
+    period_date: data.date,
+    channel: payload.channel,
+    campaign_name: payload.campaignName,
+    spend: Number(payload.spend || 0),
+    impressions: Number(payload.impressions || 0),
+    clicks: Number(payload.clicks || 0),
+    leads: Number(payload.leads || 0),
+    meetings_booked: Number(payload.meetingsBooked || 0),
+    proposals_sent: Number(payload.proposalsSent || 0),
+    deals_won: Number(payload.dealsWon || 0),
+    revenue: Number(payload.revenue || 0),
+    notes: payload.notes || null,
+    created_at: data.created_at,
+  };
 }
 
 export async function deleteMarketingDataEntry(entryId: number) {
   const { error } = await supabase
-    .from('marketing_data_entries')
+    .from('daily_logs')
     .delete()
     .eq('id', entryId);
 
@@ -1305,6 +1363,10 @@ export async function deleteMarketingDataEntry(entryId: number) {
 }
 
 export async function getAnalyticsData(clientId: number) {
+  const auth = await supabase.auth.getUser();
+  const authUserId = auth.data.user?.id;
+  if (!authUserId) throw new Error('Usuário não autenticado');
+
   const [reports, dailyLogs, meetings, tickets, marketingEntries, snapshots] = await Promise.all([
     supabase
       .from('shared_reports')
@@ -1313,9 +1375,9 @@ export async function getAnalyticsData(clientId: number) {
       .order('period_end', { ascending: true }),
     supabase
       .from('daily_logs')
-      .select('log_date, progress_score, hours_worked')
-      .eq('client_id', clientId)
-      .order('log_date', { ascending: true }),
+      .select('date, progress, hours_worked')
+      .eq('user_id', authUserId)
+      .order('date', { ascending: true }),
     supabase
       .from('meeting_events')
       .select('meeting_date, meeting_type')
@@ -1327,10 +1389,10 @@ export async function getAnalyticsData(clientId: number) {
       .eq('client_id', clientId)
       .order('created_at', { ascending: true }),
     supabase
-      .from('marketing_data_entries')
-      .select('period_date, spend, leads, meetings_booked, proposals_sent, deals_won, revenue, channel, impressions, clicks')
-      .eq('client_id', clientId)
-      .order('period_date', { ascending: true }),
+      .from('daily_logs')
+      .select('date, progress, hours_worked')
+      .eq('user_id', authUserId)
+      .order('date', { ascending: true }),
     supabase
       .from('daily_operational_snapshots')
       .select('*')
@@ -1399,21 +1461,20 @@ export async function getAnalyticsData(clientId: number) {
   });
 
   (marketingEntries.data || []).forEach((row: any) => {
-    const key = toMonthKey(row.period_date);
+    const key = toMonthKey(row.date);
     const bucket = ensureMonth(key);
-    const leads = toNumber(row.leads);
-    const spend = toNumber(row.spend);
-    const meetingsBooked = toNumber(row.meetings_booked);
-    const proposalsSent = toNumber(row.proposals_sent);
-    const dealsWon = toNumber(row.deals_won);
-    const revenue = toNumber(row.revenue);
+    const leads = toNumber(row.progress);
+    const meetingsBooked = 0;
+    const proposalsSent = 0;
+    const dealsWon = 0;
+    const revenue = 0;
 
     bucket.leads += leads;
     bucket.meetings += meetingsBooked;
     bucket.proposals += proposalsSent;
     bucket.dealsClosed += dealsWon;
     bucket.activeCampaigns += 1;
-    bucket.costPerLead += spend > 0 && leads > 0 ? spend / leads : 0;
+    bucket.costPerLead += 0;
     bucket.averageTicket += revenue > 0 && dealsWon > 0 ? revenue / dealsWon : 0;
   });
 
@@ -1437,10 +1498,10 @@ export async function getAnalyticsData(clientId: number) {
   });
 
   (dailyLogs.data || []).forEach((row: any) => {
-    const key = toMonthKey(row.log_date);
+    const key = toMonthKey(row.date);
     if (key === 'N/A') return;
     const bucket = ensureMonth(key);
-    const progress = toNumber(row.progress_score);
+    const progress = toNumber(row.progress);
     // Project execution quality influences conversion tendency in service operations.
     bucket.conversionRate += progress;
   });

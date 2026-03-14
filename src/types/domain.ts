@@ -110,8 +110,10 @@ export interface SharedReport {
 
 export interface DailyLog {
   id: number;
-  client_id: number;
-  consultant_user_id: number;
+  user_id: string;
+  date: string;
+  progress: number;
+  // Keep compatibility with current UI mapping while backend uses date/progress.
   log_date: string;
   progress_score: number;
   hours_worked: number;
@@ -326,7 +328,7 @@ export interface DailyOperationalSnapshot {
 
 export interface MarketingDataEntry {
   id: number;
-  client_id: number;
+  user_id: string;
   period_date: string;
   channel: string;
   campaign_name: string;

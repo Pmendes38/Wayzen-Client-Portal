@@ -174,8 +174,9 @@ vi.mock('@/lib/services/portal', () => ({
     getDailyLogs: vi.fn().mockResolvedValue([
       {
         id: 1,
-        client_id: 1,
-        consultant_user_id: 2,
+        user_id: 'auth-user-1',
+        date: '2026-03-10',
+        progress: 78,
         log_date: '2026-03-10',
         progress_score: 78,
         hours_worked: 8,
@@ -514,8 +515,9 @@ describe('Reports hub', () => {
     vi.mocked(portalService.createDailyLog).mockImplementation(async (payload: any) => {
       const row = {
         id: logId++,
-        client_id: payload.clientId,
-        consultant_user_id: 2,
+        user_id: payload.userId,
+        date: payload.logDate,
+        progress: payload.progressScore,
         log_date: payload.logDate,
         progress_score: payload.progressScore,
         hours_worked: payload.hoursWorked,
@@ -768,8 +770,9 @@ describe('Reports hub', () => {
       const existingIndex = dailyLogsStore.findIndex((row) => row.log_date === payload.logDate);
       const row = {
         id: existingIndex >= 0 ? dailyLogsStore[existingIndex].id : 901,
-        client_id: payload.clientId,
-        consultant_user_id: 2,
+        user_id: payload.userId,
+        date: payload.logDate,
+        progress: payload.progressScore,
         log_date: payload.logDate,
         progress_score: payload.progressScore,
         hours_worked: payload.hoursWorked,
@@ -881,8 +884,9 @@ describe('Reports hub', () => {
     vi.mocked(portalService.createDailyLog).mockImplementation(async (payload: any) => {
       const row = {
         id: idSeed++,
-        client_id: payload.clientId,
-        consultant_user_id: 2,
+        user_id: payload.userId,
+        date: payload.logDate,
+        progress: payload.progressScore,
         log_date: payload.logDate,
         progress_score: payload.progressScore,
         hours_worked: payload.hoursWorked,
