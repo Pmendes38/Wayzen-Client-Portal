@@ -515,7 +515,7 @@ describe('Reports hub', () => {
     vi.mocked(portalService.createDailyLog).mockImplementation(async (payload: any) => {
       const row = {
         id: logId++,
-        user_id: payload.userId,
+        user_id: 'auth-user-1',
         date: payload.logDate,
         progress: payload.progressScore,
         log_date: payload.logDate,
@@ -770,7 +770,7 @@ describe('Reports hub', () => {
       const existingIndex = dailyLogsStore.findIndex((row) => row.log_date === payload.logDate);
       const row = {
         id: existingIndex >= 0 ? dailyLogsStore[existingIndex].id : 901,
-        user_id: payload.userId,
+        user_id: 'auth-user-1',
         date: payload.logDate,
         progress: payload.progressScore,
         log_date: payload.logDate,
@@ -884,7 +884,7 @@ describe('Reports hub', () => {
     vi.mocked(portalService.createDailyLog).mockImplementation(async (payload: any) => {
       const row = {
         id: idSeed++,
-        user_id: payload.userId,
+        user_id: 'auth-user-1',
         date: payload.logDate,
         progress: payload.progressScore,
         log_date: payload.logDate,

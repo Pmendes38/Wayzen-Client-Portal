@@ -242,7 +242,7 @@ export default function Reports() {
 
     Promise.all([
       portalService.getReports(activeClientId),
-      portalService.getDailyLogs(user?.id || 0),
+      portalService.getDailyLogs(),
       portalService.getAnalyticsData(activeClientId),
       portalService.getDailyOperationalSnapshots(activeClientId),
     ])
@@ -384,7 +384,6 @@ export default function Reports() {
 
     try {
       await portalService.createDailyLog({
-        userId: user?.id || 0,
         logDate: dailyLogForm.logDate,
         progressScore: Number(dailyLogForm.progressScore),
         hoursWorked: Number(dailyLogForm.hoursWorked),
@@ -400,7 +399,7 @@ export default function Reports() {
       });
 
       setDailyLogForm((prev) => ({ ...prev, summary: '', blockers: '', nextSteps: '' }));
-      const refreshed = await portalService.getDailyLogs(user?.id || 0);
+      const refreshed = await portalService.getDailyLogs();
       const refreshedSnapshots = await portalService.getDailyOperationalSnapshots(clientId);
       setDailyLogs(refreshed);
       setSnapshots(refreshedSnapshots as DailyOperationalSnapshot[]);

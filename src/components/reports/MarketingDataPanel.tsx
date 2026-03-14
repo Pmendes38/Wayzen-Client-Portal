@@ -44,8 +44,8 @@ export default function MarketingDataPanel({ embedded = false }: MarketingDataPa
   const [loading, setLoading] = useState(true);
 
   const loadEntries = async () => {
-    if (!user?.id) return;
-    const data = await portalService.getMarketingDataEntries(user.id);
+    if (!user) return;
+    const data = await portalService.getMarketingDataEntries();
     setEntries(data as MarketingDataEntry[]);
   };
 
@@ -76,7 +76,6 @@ export default function MarketingDataPanel({ embedded = false }: MarketingDataPa
 
     try {
       await portalService.createMarketingDataEntry({
-        userId: user?.id || 0,
         periodDate: form.periodDate,
         channel: form.channel.trim() || 'Nao informado',
         campaignName: form.campaignName.trim(),

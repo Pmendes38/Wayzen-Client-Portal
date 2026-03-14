@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Ticket, FileText, FolderOpen,
-  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, CalendarDays, KanbanSquare, Megaphone
+  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, CalendarDays, KanbanSquare
 } from 'lucide-react';
 import { useState } from 'react';
 import ThemeToggle from './ThemeToggle';
@@ -28,7 +28,6 @@ export default function Sidebar() {
         { to: '/tickets', icon: Ticket, label: 'Chat do Projeto' },
         { to: '/documents', icon: FolderOpen, label: 'Documentos' },
         { to: '/reports', icon: FileText, label: 'Relatórios' },
-        { to: '/marketing-data', icon: Megaphone, label: 'Dados de Marketing' },
         { to: '/notifications', icon: Bell, label: 'Notificações' },
       ]
     : [
@@ -39,7 +38,6 @@ export default function Sidebar() {
         { to: '/tickets', icon: Ticket, label: 'Chat do Projeto' },
         { to: '/documents', icon: FolderOpen, label: 'Documentos' },
         { to: '/reports', icon: FileText, label: 'Relatórios' },
-        { to: '/marketing-data', icon: Megaphone, label: 'Dados de Marketing' },
         { to: '/notifications', icon: Bell, label: 'Notificações' },
       ];
 

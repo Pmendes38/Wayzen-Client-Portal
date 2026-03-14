@@ -831,7 +831,7 @@ export async function createReport(reportData: {
   return data;
 }
 
-export async function getDailyLogs(_userId: number) {
+export async function getDailyLogs() {
   const user = await getCurrentUser();
   if (!user?.auth_user_id) throw new Error('Usuário não autenticado');
 
@@ -852,7 +852,6 @@ export async function getDailyLogs(_userId: number) {
 }
 
 export async function createDailyLog(payload: {
-  userId: number;
   logDate: string;
   progressScore: number;
   hoursWorked: number;
@@ -1255,7 +1254,7 @@ export async function syncProjectCalendarEvents(clientId: number, events: Array<
   if (upsertError) throw upsertError;
 }
 
-export async function getMarketingDataEntries(_userId: number) {
+export async function getMarketingDataEntries() {
   const user = await getCurrentUser();
   if (!user?.auth_user_id) throw new Error('Usuário não autenticado');
 
@@ -1268,7 +1267,7 @@ export async function getMarketingDataEntries(_userId: number) {
 
   if (error) throw error;
 
-  // Keep compatibility with MarketingData page while persisting to daily_logs.
+  // Keep compatibility with the embedded marketing panel while persisting to daily_logs.
   return (data || []).map((row: any) => ({
     id: row.id,
     user_id: row.user_id,
@@ -1289,7 +1288,6 @@ export async function getMarketingDataEntries(_userId: number) {
 }
 
 export async function createMarketingDataEntry(payload: {
-  userId: number;
   periodDate: string;
   channel: string;
   campaignName: string;

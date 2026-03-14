@@ -115,9 +115,8 @@ export const portalService = {
     metrics?: unknown;
   }) => queries.createReport(payload),
 
-  getDailyLogs: (userId: number) => queries.getDailyLogs(userId),
+  getDailyLogs: () => queries.getDailyLogs(),
   createDailyLog: (payload: {
-    userId: number;
     logDate: string;
     progressScore: number;
     hoursWorked: number;
@@ -204,9 +203,8 @@ export const portalService = {
     participant_ids?: number[];
   }>) => queries.syncProjectCalendarEvents(clientId, events),
 
-  getMarketingDataEntries: (userId: number) => queries.getMarketingDataEntries(userId),
+  getMarketingDataEntries: () => queries.getMarketingDataEntries(),
   createMarketingDataEntry: (payload: {
-    userId: number;
     periodDate: string;
     channel: string;
     campaignName: string;
