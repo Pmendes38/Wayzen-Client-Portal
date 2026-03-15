@@ -54,15 +54,25 @@ export default function Kanban() {
 
   const refreshKanbanData = async () => {
     if (!activeClientId) return;
-    const [sprintsData, backlogData, activitiesData] = await Promise.all([
+
+    const [sprintsResult, backlogResult, activitiesResult] = await Promise.allSettled([
       portalService.getSprints(activeClientId),
       portalService.getSprintBacklog(activeClientId),
       portalService.getBacklogActivities(activeClientId),
     ]);
 
-    setSprints(sprintsData as Sprint[]);
-    setBacklog(backlogData as SprintBacklogItem[]);
-    setBacklogActivities((activitiesData || []) as any[]);
+    if (sprintsResult.status === 'rejected') throw sprintsResult.reason;
+    if (backlogResult.status === 'rejected') throw backlogResult.reason;
+
+    setSprints((sprintsResult.value || []) as Sprint[]);
+    setBacklog((backlogResult.value || []) as SprintBacklogItem[]);
+
+    if (activitiesResult.status === 'fulfilled') {
+      setBacklogActivities((activitiesResult.value || []) as any[]);
+    } else {
+      console.error(activitiesResult.reason);
+      setBacklogActivities([]);
+    }
   };
 
   useEffect(() => {
@@ -146,15 +156,30 @@ export default function Kanban() {
       updates.sprintId = target.sprint_id || defaultSprintId;
     }
 
+    if (!updates.status) return;
+
+    const isSameStatus = target.status === updates.status;
+    const isSameSprint = (target.sprint_id ?? null) === (updates.sprintId ?? null);
+    if (isSameStatus && isSameSprint) return;
+
     setSyncState('syncing');
     try {
-      await portalService.updateSprintBacklogItem(itemId, {
+      const updated = await portalService.updateSprintBacklogItem(itemId, {
         ...updates,
         clientId: activeClientId,
         title: target.title,
         dueDate: target.due_date || undefined,
       });
-      await refreshKanbanData();
+
+      // Keep board responsive even when secondary sync/read operations fail.
+      setBacklog((prev) => prev.map((item) => (
+        item.id === itemId ? { ...item, ...(updated as Partial<SprintBacklogItem>) } : item
+      )));
+
+      refreshKanbanData().catch((error) => {
+        console.error(error);
+      });
+
       if (targetColumn === 'finished') {
         setView('registry');
       }
@@ -396,10 +421,19 @@ export default function Kanban() {
               <div
                 key={column.id}
                 className="rounded-2xl border border-slate-200 bg-slate-50 min-h-[520px] dark:border-slate-700 dark:bg-slate-900"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={async () => {
-                  if (!draggingId || syncState !== 'idle') return;
-                  await moveBacklogCard(draggingId, column.id);
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                }}
+                onDrop={async (event) => {
+                  event.preventDefault();
+                  if (syncState !== 'idle') return;
+
+                  const transferId = Number(event.dataTransfer.getData('text/plain'));
+                  const cardId = Number.isFinite(transferId) && transferId > 0 ? transferId : draggingId;
+                  if (!cardId) return;
+
+                  await moveBacklogCard(cardId, column.id);
                   setDraggingId(null);
                 }}
               >
@@ -417,7 +451,12 @@ export default function Kanban() {
                       <div
                         key={item.id}
                         draggable={syncState === 'idle'}
-                        onDragStart={() => setDraggingId(item.id)}
+                        onDragStart={(event) => {
+                          setDraggingId(item.id);
+                          event.dataTransfer.setData('text/plain', String(item.id));
+                          event.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnd={() => setDraggingId(null)}
                         className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
                       >
                         <div className="flex items-start justify-between gap-2">

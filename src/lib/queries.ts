@@ -1034,7 +1034,10 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
         syncError = retry.error;
       }
 
-      if (syncError) throw syncError;
+      if (syncError) {
+        // Kanban should continue even if legacy linked task sync fails.
+        console.error(syncError);
+      }
     }
   }
 
