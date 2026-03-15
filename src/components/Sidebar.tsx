@@ -77,9 +77,7 @@ export default function Sidebar() {
       <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-slate-800">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-br from-wayzen-500 to-brand-midnight rounded-xl flex items-center justify-center shadow-soft">
-              <span className="text-white font-bold text-sm">W</span>
-            </div>
+            <img src="/favicon/favicon.svg" alt="Wayzen" className="w-9 h-9 rounded-xl" />
             <div>
               <p className="text-xs text-gray-500 dark:text-slate-400 leading-none">Wayzen</p>
               <span className="font-semibold text-wayzen-700 dark:text-wayzen-300 leading-none">Client Portal</span>

@@ -38,9 +38,11 @@ export default function Login() {
         <div className="absolute inset-0 bg-wayzen-glow opacity-80" />
         <div className="relative z-10 flex flex-col justify-between w-full">
           <div className="inline-flex items-center gap-3">
-            <div className="w-11 h-11 bg-white/15 backdrop-blur border border-white/20 rounded-xl flex items-center justify-center">
-              <span className="font-extrabold text-xl">W</span>
-            </div>
+            <img
+              src="/assets/logo-wayzen.png"
+              alt="Wayzen"
+              className="h-10 w-auto"
+            />
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-wayzen-100">Wayzen</p>
               <p className="text-lg font-bold">Client Portal</p>
@@ -76,8 +78,8 @@ export default function Login() {
       <section className="flex items-center justify-center p-4 md:p-8 bg-slate-50/70 dark:bg-slate-950">
         <div className="w-full max-w-md">
           <div className="text-center mb-6 lg:hidden">
-            <div className="w-14 h-14 bg-wayzen-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-soft">
-              <span className="text-white font-bold text-xl">W</span>
+            <div className="w-14 h-14 rounded-2xl border border-wayzen-200 flex items-center justify-center mx-auto mb-3 shadow-soft bg-white">
+              <img src="/favicon/favicon.svg" alt="Wayzen" className="w-10 h-10" />
             </div>
             <h1 className="text-2xl font-extrabold text-brand-midnight dark:text-wayzen-200">Wayzen Client Portal</h1>
           </div>
