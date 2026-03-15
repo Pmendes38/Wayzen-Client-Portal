@@ -4,7 +4,8 @@ import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
 import { ChatMessage, ChatRoom, ContactUser } from '@/types/domain';
-import { MessageSquare, Send, Users } from 'lucide-react';
+import { Lock, MessageSquare, Plus, Send, Users } from 'lucide-react';
+import GroupRoomModal from '@/components/chat/GroupRoomModal';
 
 export default function Tickets() {
   const { user } = useAuth();
@@ -15,6 +16,39 @@ export default function Tickets() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
+  const roomPrivacyMeta = (roomType: ChatRoom['room_type']) => {
+    if (roomType === 'direct') {
+      return {
+        label: 'Privado',
+        className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+        icon: <Lock size={12} />,
+      };
+    }
+
+    if (roomType === 'internal') {
+      return {
+        label: 'Interno Wayzen',
+        className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-200',
+        icon: null,
+      };
+    }
+
+    if (roomType === 'group') {
+      return {
+        label: 'Grupo Privado',
+        className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200',
+        icon: null,
+      };
+    }
+
+    return {
+      label: 'Canal Geral',
+      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200',
+      icon: null,
+    };
+  };
 
   const roomLabel = (room: ChatRoom) => {
     if (room.room_type === 'general') return 'Grupo Geral';
@@ -30,7 +64,7 @@ export default function Tickets() {
     [rooms]
   );
 
-  const loadRoomsAndContacts = async () => {
+  const loadRoomsAndContacts = async (preferredRoomId?: number) => {
     if (!activeClientId) {
       setLoading(false);
       return;
@@ -45,7 +79,22 @@ export default function Tickets() {
       setRooms(roomData);
       setContacts(contactData);
 
-      if (!selectedRoom && roomData.length) {
+      const nextRoom = preferredRoomId
+        ? roomData.find((room) => room.id === preferredRoomId)
+        : null;
+
+      if (nextRoom) {
+        setSelectedRoom(nextRoom);
+      } else if (selectedRoom) {
+        const persisted = roomData.find((room) => room.id === selectedRoom.id);
+        if (persisted) {
+          setSelectedRoom(persisted);
+        } else if (roomData.length) {
+          setSelectedRoom(roomData[0]);
+        } else {
+          setSelectedRoom(null);
+        }
+      } else if (roomData.length) {
         setSelectedRoom(roomData[0]);
       }
     } catch (err) {
@@ -101,6 +150,11 @@ export default function Tickets() {
     setMessages(data);
   };
 
+  const handleGroupRoomCreated = async (room: ChatRoom) => {
+    setIsGroupModalOpen(false);
+    await loadRoomsAndContacts(room.id);
+  };
+
   if (loading) return <PageLoader />;
 
   if (!activeClientId) {
@@ -119,7 +173,16 @@ export default function Tickets() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-4">
           <div className="card p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400 mb-2">Grupos</p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-500 dark:text-slate-400">Grupos</p>
+              <button
+                type="button"
+                onClick={() => setIsGroupModalOpen(true)}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:border-wayzen-300 hover:text-wayzen-700 dark:border-slate-700 dark:text-slate-300 dark:hover:border-wayzen-500 dark:hover:text-wayzen-300"
+              >
+                <Plus size={12} /> Novo grupo
+              </button>
+            </div>
             <div className="space-y-2">
               {groupedRooms.groups.map((room) => (
                 <button
@@ -128,9 +191,15 @@ export default function Tickets() {
                   className={`w-full p-3 rounded-xl text-left border transition-colors ${selectedRoom?.id === room.id ? 'border-wayzen-500 bg-wayzen-50/60 dark:bg-wayzen-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-wayzen-300'}`}
                 >
                   <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{roomLabel(room)}</p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                    {room.room_type === 'internal' ? 'Apenas equipe interna' : 'Time Wayzen e cliente'}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${roomPrivacyMeta(room.room_type).className}`}>
+                      {roomPrivacyMeta(room.room_type).icon}
+                      {roomPrivacyMeta(room.room_type).label}
+                    </span>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      {room.room_type === 'internal' ? 'Apenas equipe interna' : 'Time Wayzen e cliente'}
+                    </p>
+                  </div>
                 </button>
               ))}
             </div>
@@ -170,7 +239,12 @@ export default function Tickets() {
                     className={`w-full p-3 rounded-xl text-left border transition-colors ${selectedRoom?.id === room.id ? 'border-wayzen-500 bg-wayzen-50/60 dark:bg-wayzen-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-wayzen-300'}`}
                   >
                     <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{roomLabel(room)}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Conversa privada</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${roomPrivacyMeta(room.room_type).className}`}>
+                        {roomPrivacyMeta(room.room_type).icon}
+                        {roomPrivacyMeta(room.room_type).label}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -184,6 +258,12 @@ export default function Tickets() {
               <div className="p-5 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">{roomLabel(selectedRoom)}</h2>
+                  <div className="mt-1">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${roomPrivacyMeta(selectedRoom.room_type).className}`}>
+                      {roomPrivacyMeta(selectedRoom.room_type).icon}
+                      {roomPrivacyMeta(selectedRoom.room_type).label}
+                    </span>
+                  </div>
                   <p className="text-sm text-gray-500 dark:text-slate-400">
                     {selectedRoom.room_type === 'internal'
                       ? 'Canal interno invisivel para o cliente.'
@@ -237,6 +317,14 @@ export default function Tickets() {
           )}
         </div>
       </div>
+
+      <GroupRoomModal
+        isOpen={isGroupModalOpen}
+        clientId={activeClientId}
+        contacts={contacts}
+        onClose={() => setIsGroupModalOpen(false)}
+        onCreated={handleGroupRoomCreated}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, PhoneCall, Plus } from 'lucide-react';
 import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
-import { ContactUser, MeetingEvent, ProjectCalendarEvent } from '@/types/domain';
+import { CalendarEventType, ContactUser, MeetingEvent, ProjectCalendarEvent } from '@/types/domain';
 import PageLoader from '@/components/PageLoader';
 import InteractiveCalendar from '@/components/reports/InteractiveCalendar';
 import { useProjectCalendar } from '@/hooks/useProjectCalendar';
@@ -10,6 +10,15 @@ import { useProjectContacts } from '@/hooks/useProjectContacts';
 import ProjectContactsPanel from '@/components/project/ProjectContactsPanel';
 
 export default function Meetings() {
+  const CALENDAR_TYPE_META: Record<CalendarEventType, { label: string; badge: string }> = {
+    sprint_delivery: { label: 'Entrega de sprint', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200' },
+    meeting: { label: 'Reuniao', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200' },
+    transcript: { label: 'Transcricao', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' },
+    general: { label: 'Geral', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200' },
+    task_due: { label: 'Prazo de atividade', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200' },
+    task_completed: { label: 'Atividade concluida', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200' },
+  };
+
   const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
   const [events, setEvents] = useState<MeetingEvent[]>([]);
   const [chatContacts, setChatContacts] = useState<ContactUser[]>([]);
@@ -39,6 +48,24 @@ export default function Meetings() {
     [chatContacts, contacts]
   );
   const { events: calendarEvents, setEvents: setCalendarEvents } = useProjectCalendar(activeClientId, calendarSeed);
+  const calendarTypeCounts = useMemo(
+    () =>
+      calendarEvents.reduce<Record<CalendarEventType, number>>(
+        (acc, event) => {
+          acc[event.type] += 1;
+          return acc;
+        },
+        {
+          sprint_delivery: 0,
+          meeting: 0,
+          transcript: 0,
+          general: 0,
+          task_due: 0,
+          task_completed: 0,
+        }
+      ),
+    [calendarEvents]
+  );
 
   const loadEvents = async () => {
     if (!activeClientId) return;
@@ -100,6 +127,23 @@ export default function Meetings() {
         contacts={calendarContacts}
         onEventsChange={setCalendarEvents}
       />
+
+      <div className="card p-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Visao consolidada do calendario</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+          Este calendario combina reunioes e eventos automaticos de sprint/kanban vindos do banco em tempo real.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {(Object.keys(CALENDAR_TYPE_META) as CalendarEventType[]).map((type) => (
+            <span
+              key={type}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${CALENDAR_TYPE_META[type].badge}`}
+            >
+              {CALENDAR_TYPE_META[type].label}: {calendarTypeCounts[type]}
+            </span>
+          ))}
+        </div>
+      </div>
 
       {isInternal && (
         <ProjectContactsPanel

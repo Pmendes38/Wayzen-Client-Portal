@@ -14,14 +14,16 @@ import {
   subMonths,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CalendarDays, ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Pencil, Trash2, X, type LucideIcon } from 'lucide-react';
 import { CalendarEventType, ContactUser, ProjectCalendarEvent } from '@/types/domain';
 
-const EVENT_TYPE_META: Record<CalendarEventType, { label: string; badge: string }> = {
-  sprint_delivery: { label: 'Fim de Sprint / Entrega', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200' },
-  meeting: { label: 'Reuniao', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200' },
-  transcript: { label: 'Transcricao / Gravacao', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200' },
-  general: { label: 'Compromisso geral', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200' },
+const EVENT_TYPE_META: Record<CalendarEventType, { label: string; badge: string; icon: LucideIcon }> = {
+  sprint_delivery: { label: 'Fim de Sprint / Entrega', badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200', icon: CalendarDays },
+  meeting: { label: 'Reuniao', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200', icon: CalendarDays },
+  transcript: { label: 'Transcricao / Gravacao', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200', icon: CalendarDays },
+  general: { label: 'Compromisso geral', badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200', icon: CalendarDays },
+  task_due: { label: 'Prazo da atividade', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200', icon: Clock3 },
+  task_completed: { label: 'Atividade concluida', badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200', icon: CheckCircle2 },
 };
 
 type CalendarForm = {
@@ -42,6 +44,73 @@ type InteractiveCalendarProps = {
 const weekdayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 const EMPTY_EVENTS: ProjectCalendarEvent[] = [];
 const EMPTY_CONTACTS: ContactUser[] = [];
+
+/** Strips well-known backend-generated title prefixes for clean display. */
+function stripTitlePrefix(title: string): string {
+  return title
+    .replace(/^Prazo:\s*/i, '')
+    .replace(/^Entrega:\s*/i, '')
+    .replace(/^Concluida:\s*/i, '');
+}
+
+/**
+ * Resolves the sprint name linked to an event.
+ * Uses structured backend title/description patterns first, then falls back
+ * to regex for user-created events (meeting, transcript, general).
+ * Returns null when no sprint context exists for this event type.
+ */
+function resolveSprintLabel(event: ProjectCalendarEvent): string | null {
+  // sprint_delivery: title = "Entrega: {sprint_name}"
+  if (event.type === 'sprint_delivery') {
+    const fromTitle = event.title?.match(/^Entrega:\s*(.+)/i);
+    if (fromTitle?.[1]) return fromTitle[1].trim();
+    // fallback: description = 'Entrega da sprint "{name}"'
+    const fromDesc = event.description?.match(/sprint\s+"([^"]+)"/i);
+    if (fromDesc?.[1]) return fromDesc[1];
+    return event.title ?? null;
+  }
+
+  // task_due / task_completed: no sprint context is stored by the backend
+  if (event.type === 'task_due' || event.type === 'task_completed') {
+    return null;
+  }
+
+  // meeting / transcript / general: free-form — scan combined text
+  const text = `${event.title || ''} ${event.description || ''}`;
+  const quotedMatch = text.match(/sprint\s*"([^"]+)"/i);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+
+  // Plain match: "Sprint Nome" or "Sprint: Nome" — stop at common Portuguese prepositions
+  const plainMatch = text.match(/\bsprint\s*[:\-]?\s*([A-Za-zÀ-ú0-9 _.-]+)/i);
+  if (plainMatch?.[1]) {
+    const candidate = plainMatch[1]
+      .split(/\s+(?:de|da|do|para|com|em)\s+/i)[0]
+      .trim();
+    if (candidate.length > 1) return candidate;
+  }
+
+  return null;
+}
+
+function resolveRelevantDate(event: ProjectCalendarEvent): string {
+  const parsed = parseISO(event.start_at);
+  if (!isValid(parsed)) {
+    return event.start_at || 'Nao informada';
+  }
+  return format(parsed, "dd/MM/yyyy HH:mm");
+}
+
+function buildEventTooltip(event: ProjectCalendarEvent): string {
+  const lines: string[] = [`Nome: ${stripTitlePrefix(event.title || 'Sem nome')}`];
+
+  const sprint = resolveSprintLabel(event);
+  if (sprint !== null) {
+    lines.push(`Sprint: ${sprint}`);
+  }
+
+  lines.push(`Data: ${resolveRelevantDate(event)}`);
+  return lines.join('\n');
+}
 
 export default function InteractiveCalendar({ initialEvents = EMPTY_EVENTS, contacts = EMPTY_CONTACTS, onEventsChange }: InteractiveCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -250,25 +319,33 @@ export default function InteractiveCalendar({ initialEvents = EMPTY_EVENTS, cont
 
               <div className="space-y-1">
                 {dayEvents.slice(0, 3).map((event) => (
-                  <div
-                    key={event.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditModal(event);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openEditModal(event);
-                      }
-                    }}
-                    className={`w-full truncate rounded-md px-1.5 py-1 text-[11px] font-medium ${EVENT_TYPE_META[event.type].badge}`}
-                    title={event.title}
-                  >
-                    {format(parseISO(event.start_at), 'HH:mm')} {event.title}
-                  </div>
+                  (() => {
+                    const EventIcon = EVENT_TYPE_META[event.type].icon;
+                    return (
+                      <div
+                        key={event.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(event);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openEditModal(event);
+                          }
+                        }}
+                        className={`w-full truncate rounded-md px-1.5 py-1 text-[11px] font-medium ${EVENT_TYPE_META[event.type].badge}`}
+                        title={buildEventTooltip(event)}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          <EventIcon size={11} />
+                          <span>{format(parseISO(event.start_at), 'HH:mm')} {event.title}</span>
+                        </span>
+                      </div>
+                    );
+                  })()
                 ))}
                 {dayEvents.length > 3 && (
                   <span className="text-[10px] text-slate-500 dark:text-slate-400">+{dayEvents.length - 3} eventos</span>

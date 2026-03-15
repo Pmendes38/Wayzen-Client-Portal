@@ -1,11 +1,15 @@
 import * as queries from '@/lib/queries';
 import {
+  ChatRoomParticipant,
   DailyLog,
   MeetingEvent,
+  NotificationItem,
   SharedDocument,
   SharedReport,
   Sprint,
+  SprintAttachment,
   SprintBacklogItem,
+  SprintSubtask,
   SprintTask,
   SuccessResponse,
   TicketItem,
@@ -31,6 +35,72 @@ interface DocumentForm {
   category?: string;
   fileSize: number;
   mimeType: string;
+}
+
+type SubtaskInput = Partial<SprintSubtask> & {
+  id?: string;
+  title?: string;
+  done?: boolean;
+};
+
+type AttachmentInput = Partial<SprintAttachment> & {
+  id?: string;
+  name?: string;
+  url?: string;
+  type?: string | null;
+  mimeType?: string | null;
+  uploaded_at?: string;
+};
+
+function normalizeSubtasks(subtasks?: SubtaskInput[]): SprintSubtask[] | undefined {
+  if (subtasks === undefined) return undefined;
+  if (!Array.isArray(subtasks)) {
+    throw new Error('Subtarefas precisam ser enviadas em uma lista.');
+  }
+
+  return subtasks.map((subtask, index) => {
+    const id = String(subtask.id || '').trim();
+    const title = String(subtask.title || '').trim();
+
+    if (!id) throw new Error(`Subtarefa ${index + 1} sem id.`);
+    if (!title) throw new Error(`Subtarefa ${index + 1} sem titulo.`);
+
+    return {
+      id,
+      title,
+      done: Boolean(subtask.done),
+      created_at: typeof subtask.created_at === 'string' && subtask.created_at
+        ? subtask.created_at
+        : new Date().toISOString(),
+    };
+  });
+}
+
+function normalizeAttachments(attachments?: AttachmentInput[]): SprintAttachment[] | undefined {
+  if (attachments === undefined) return undefined;
+  if (!Array.isArray(attachments)) {
+    throw new Error('Anexos precisam ser enviados em uma lista.');
+  }
+
+  return attachments.map((attachment, index) => {
+    const id = String(attachment.id || '').trim();
+    const name = String(attachment.name || '').trim();
+    const url = String(attachment.url || '').trim();
+
+    if (!id) throw new Error(`Anexo ${index + 1} sem id.`);
+    if (!name) throw new Error(`Anexo ${index + 1} sem nome.`);
+    if (!url) throw new Error(`Anexo ${index + 1} sem url.`);
+
+    return {
+      id,
+      name,
+      url,
+      type: attachment.type ?? attachment.mimeType ?? null,
+      uploaded_at: typeof attachment.uploaded_at === 'string' && attachment.uploaded_at
+        ? attachment.uploaded_at
+        : new Date().toISOString(),
+    };
+  });
 }
 
 export const portalService = {
@@ -60,11 +130,33 @@ export const portalService = {
     backlogItemId?: number | null;
     title: string;
     description?: string;
+    contextNotes?: string;
+    subtasks?: SubtaskInput[];
+    attachments?: AttachmentInput[];
     startDate?: string;
     endDate?: string;
+    dueDate?: string;
     taskOrder?: number;
-  }) => queries.createSprintTask(payload),
-  updateSprintTask: (taskId: number, payload: { isCompleted?: boolean; title?: string; description?: string }) => queries.updateSprintTask(taskId, payload),
+  }) => queries.createSprintTask({
+    ...payload,
+    subtasks: normalizeSubtasks(payload.subtasks),
+    attachments: normalizeAttachments(payload.attachments),
+  }),
+  updateSprintTask: (taskId: number, payload: {
+    isCompleted?: boolean;
+    title?: string;
+    description?: string;
+    contextNotes?: string;
+    subtasks?: SubtaskInput[];
+    attachments?: AttachmentInput[];
+    dueDate?: string;
+    endDate?: string;
+    clientId?: number;
+  }) => queries.updateSprintTask(taskId, {
+    ...payload,
+    subtasks: normalizeSubtasks(payload.subtasks),
+    attachments: normalizeAttachments(payload.attachments),
+  }),
   deleteSprintTask: (taskId: number) => queries.deleteSprintTask(taskId),
   getSprintBacklog: (clientId: number) => queries.getSprintBacklog(clientId),
   updateSprintBacklogItem: (backlogId: number, payload: {
@@ -73,17 +165,31 @@ export const portalService = {
     clientId?: number;
     title?: string;
     details?: string;
+    contextNotes?: string;
+    subtasks?: SubtaskInput[];
+    attachments?: AttachmentInput[];
     dueDate?: string;
-  }) => queries.updateSprintBacklogItem(backlogId, payload),
+  }) => queries.updateSprintBacklogItem(backlogId, {
+    ...payload,
+    subtasks: normalizeSubtasks(payload.subtasks),
+    attachments: normalizeAttachments(payload.attachments),
+  }),
   getBacklogActivities: (clientId: number) => queries.getBacklogActivities(clientId),
   createSprintBacklogItem: (payload: {
     clientId: number;
     sprintId?: number | null;
     title: string;
     details?: string;
+    contextNotes?: string;
+    subtasks?: SubtaskInput[];
+    attachments?: AttachmentInput[];
     occurredOn?: string;
     dueDate?: string;
-  }) => queries.createSprintBacklogItem(payload),
+  }) => queries.createSprintBacklogItem({
+    ...payload,
+    subtasks: normalizeSubtasks(payload.subtasks),
+    attachments: normalizeAttachments(payload.attachments),
+  }),
   archiveCompletedBacklogItems: (clientId: number) => queries.archiveCompletedBacklogItems(clientId),
 
   getTickets: (clientId?: number) => queries.getTickets(clientId),
@@ -98,6 +204,14 @@ export const portalService = {
   getChatContacts: (clientId: number) => queries.getChatContacts(clientId),
   getOrCreateDirectChatRoom: (clientId: number, contactUserId: number) =>
     queries.getOrCreateDirectChatRoom(clientId, contactUserId),
+  createChatGroupRoom: (clientId: number, payload: { name: string; participantIds: number[] }) =>
+    queries.createChatGroupRoom(clientId, payload),
+  getChatRoomParticipants: (roomId: number): Promise<ChatRoomParticipant[]> =>
+    queries.getChatRoomParticipants(roomId),
+  addChatRoomParticipants: (roomId: number, participantIds: number[]) =>
+    queries.addChatRoomParticipants(roomId, participantIds),
+  removeChatRoomParticipant: (roomId: number, participantId: number) =>
+    queries.removeChatRoomParticipant(roomId, participantId),
   getOrCreateProjectContactRoom: (clientId: number, contactName: string, projectContactId: number) =>
     queries.getOrCreateProjectContactRoom(clientId, contactName, projectContactId),
   getChatMessages: (roomId: number) => queries.getChatMessages(roomId),
@@ -174,6 +288,19 @@ export const portalService = {
   }) => queries.createMeetingEvent(payload),
 
   getNotifications: () => queries.getNotifications(),
+  createNotificationEvent: (payload: {
+    userId: number;
+    type: string;
+    category: string;
+    eventType: string;
+    title: string;
+    message?: string;
+    linkTo?: string;
+    sourceEntityType?: string;
+    sourceEntityId?: number;
+    occurredAt?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<NotificationItem> => queries.createNotificationEvent(payload),
   markNotificationRead: (notificationId: number) => queries.markNotificationAsRead(notificationId),
   markAllNotificationsRead: () => queries.markAllNotificationsAsRead(),
 

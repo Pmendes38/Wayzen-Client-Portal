@@ -76,23 +76,63 @@ export type Database = {
         Row: {
           id: number;
           client_id: number;
+          name: string;
           week_number: number;
-          start_date: string;
-          end_date: string;
+          start_date: string | null;
+          end_date: string | null;
           status: 'planned' | 'in_progress' | 'completed';
-          goals: string | null;
+          notes: string | null;
           created_at: string;
-          updated_at: string;
         };
       };
       sprint_tasks: {
         Row: {
           id: number;
           sprint_id: number;
+          backlog_item_id: number | null;
           title: string;
           description: string | null;
+          context_notes: string | null;
+          subtasks: any;
+          attachments: any;
+          start_date: string | null;
+          end_date: string | null;
+          due_date: string | null;
+          completed_at: string | null;
           is_completed: boolean;
+          week_number: number;
           task_order: number;
+          created_at: string;
+        };
+      };
+      sprint_backlog: {
+        Row: {
+          id: number;
+          client_id: number;
+          sprint_id: number | null;
+          title: string;
+          details: string | null;
+          context_notes: string | null;
+          subtasks: any;
+          attachments: any;
+          status: 'planned' | 'in_progress' | 'done';
+          occurred_on: string | null;
+          due_date: string | null;
+          completed_at: string | null;
+          created_by_user_id: number;
+          created_at: string;
+        };
+      };
+      project_calendar_events: {
+        Row: {
+          id: number;
+          client_id: number;
+          title: string;
+          start_at: string;
+          end_at: string;
+          type: 'sprint_delivery' | 'meeting' | 'transcript' | 'general' | 'task_due' | 'task_completed';
+          description: string | null;
+          participant_ids: number[];
           created_at: string;
           updated_at: string;
         };
@@ -142,9 +182,48 @@ export type Database = {
           id: number;
           user_id: number;
           type: string;
+          category: string;
+          event_type: string;
           title: string;
           message: string;
           is_read: boolean;
+          read_at: string | null;
+          occurred_at: string;
+          link_to: string | null;
+          source_entity_type: string | null;
+          source_entity_id: number | null;
+          metadata: any;
+          created_at: string;
+        };
+      };
+      chat_rooms: {
+        Row: {
+          id: number;
+          client_id: number;
+          room_type: 'general' | 'internal' | 'direct' | 'group';
+          name: string;
+          direct_user_a_id: number | null;
+          direct_user_b_id: number | null;
+          created_by_user_id: number;
+          created_at: string;
+        };
+      };
+      chat_room_participants: {
+        Row: {
+          room_id: number;
+          user_id: number;
+          added_by_user_id: number | null;
+          is_admin: boolean;
+          last_read_at: string | null;
+          joined_at: string;
+        };
+      };
+      chat_messages: {
+        Row: {
+          id: number;
+          room_id: number;
+          user_id: number;
+          message: string;
           created_at: string;
         };
       };

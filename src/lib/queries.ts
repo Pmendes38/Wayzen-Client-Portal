@@ -14,6 +14,200 @@ const adminCreateUserClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_K
   },
 });
 
+type JsonSubtask = {
+  id: string;
+  title: string;
+  done: boolean;
+  created_at: string;
+};
+
+type JsonAttachment = {
+  id: string;
+  name: string;
+  url: string;
+  type?: string | null;
+  uploaded_at: string;
+};
+
+type NotificationInsert = {
+  user_id: number;
+  type: string;
+  category: string;
+  event_type: string;
+  title: string;
+  message?: string;
+  link_to?: string;
+  source_entity_type?: string;
+  source_entity_id?: number;
+  occurred_at: string;
+  metadata: Record<string, unknown>;
+  is_read: boolean;
+  read_at: string | null;
+};
+
+function dedupeNumberList(values: Array<number | null | undefined>): number[] {
+  return Array.from(new Set(values.filter((value): value is number => typeof value === 'number' && Number.isFinite(value))));
+}
+
+async function insertNotificationEvents(rows: NotificationInsert[]): Promise<void> {
+  if (!rows.length) return;
+
+  const { error } = await supabase
+    .from('notifications')
+    .insert(rows);
+
+  if (error) throw error;
+}
+
+async function getClientNotificationRecipientIds(
+  clientId: number,
+  options?: {
+    excludeUserIds?: number[];
+    includeInternalUsers?: boolean;
+    includeClientUsers?: boolean;
+  },
+): Promise<number[]> {
+  const recipientIds = new Set<number>();
+
+  if (options?.includeInternalUsers !== false) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('is_active', true)
+      .in('role', ['admin', 'consultant']);
+
+    if (error) throw error;
+    for (const user of data || []) recipientIds.add(user.id);
+  }
+
+  if (options?.includeClientUsers !== false) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('is_active', true)
+      .eq('client_id', clientId);
+
+    if (error) throw error;
+    for (const user of data || []) recipientIds.add(user.id);
+  }
+
+  for (const excludedId of options?.excludeUserIds || []) {
+    recipientIds.delete(excludedId);
+  }
+
+  return Array.from(recipientIds);
+}
+
+async function notifyClientUsers(clientId: number, payload: {
+  type: string;
+  category: string;
+  eventType: string;
+  title: string;
+  message?: string;
+  linkTo?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: number;
+  occurredAt?: string;
+  metadata?: Record<string, unknown>;
+  excludeUserIds?: number[];
+  includeInternalUsers?: boolean;
+  includeClientUsers?: boolean;
+}) {
+  const recipientIds = await getClientNotificationRecipientIds(clientId, {
+    excludeUserIds: payload.excludeUserIds,
+    includeInternalUsers: payload.includeInternalUsers,
+    includeClientUsers: payload.includeClientUsers,
+  });
+
+  if (!recipientIds.length) return;
+
+  const occurredAt = payload.occurredAt || new Date().toISOString();
+  await insertNotificationEvents(
+    recipientIds.map((userId) => ({
+      user_id: userId,
+      type: payload.type,
+      category: payload.category,
+      event_type: payload.eventType,
+      title: payload.title,
+      message: payload.message,
+      link_to: payload.linkTo,
+      source_entity_type: payload.sourceEntityType,
+      source_entity_id: payload.sourceEntityId,
+      occurred_at: occurredAt,
+      metadata: payload.metadata || {},
+      is_read: false,
+      read_at: null,
+    })),
+  );
+}
+
+async function getChatRoomParticipantIds(roomId: number, excludeUserIds: number[] = []): Promise<number[]> {
+  const { data, error } = await supabase
+    .from('chat_room_participants')
+    .select('user_id')
+    .eq('room_id', roomId);
+
+  if (error) throw error;
+
+  const excluded = new Set(excludeUserIds);
+  return (data || [])
+    .map((row) => row.user_id)
+    .filter((userId) => !excluded.has(userId));
+}
+
+async function notifyChatParticipants(roomId: number, payload: {
+  senderUserId: number;
+  title: string;
+  message?: string;
+  eventType: string;
+  sourceEntityId?: number;
+  metadata?: Record<string, unknown>;
+}) {
+  const recipientIds = await getChatRoomParticipantIds(roomId, [payload.senderUserId]);
+  if (!recipientIds.length) return;
+
+  const occurredAt = new Date().toISOString();
+  await insertNotificationEvents(
+    recipientIds.map((userId) => ({
+      user_id: userId,
+      type: 'chat_message',
+      category: 'chat',
+      event_type: payload.eventType,
+      title: payload.title,
+      message: payload.message,
+      link_to: '/tickets',
+      source_entity_type: 'chat_room',
+      source_entity_id: payload.sourceEntityId ?? roomId,
+      occurred_at: occurredAt,
+      metadata: payload.metadata || {},
+      is_read: false,
+      read_at: null,
+    })),
+  );
+}
+
+async function syncRoomParticipants(roomId: number, participants: Array<{
+  user_id: number;
+  added_by_user_id?: number | null;
+  is_admin?: boolean;
+}>): Promise<void> {
+  if (!participants.length) return;
+
+  const { error } = await supabase
+    .from('chat_room_participants')
+    .upsert(
+      participants.map((participant) => ({
+        room_id: roomId,
+        user_id: participant.user_id,
+        added_by_user_id: participant.added_by_user_id ?? null,
+        is_admin: participant.is_admin ?? false,
+      })),
+      { onConflict: 'room_id,user_id' },
+    );
+
+  if (error) throw error;
+}
+
 // ─── Users (Admin) ────────────────────────────────────────────────────
 export async function getUsers() {
   const { data, error } = await supabase
@@ -391,8 +585,31 @@ async function upsertBacklogCalendarEvent(
         title: `Prazo: ${title}`,
         start_at: `${dueDate}T09:00:00Z`,
         end_at: `${dueDate}T09:00:00Z`,
-        type: 'general',
+        type: 'task_due',
         description: `Atividade: ${title}`,
+        participant_ids: [],
+      },
+      { onConflict: 'id' },
+    );
+}
+
+async function upsertTaskCompletionCalendarEvent(
+  clientId: number,
+  taskId: number,
+  title: string,
+  completedAt: string,
+): Promise<void> {
+  await supabase
+    .from('project_calendar_events')
+    .upsert(
+      {
+        id: 850000 + taskId,
+        client_id: clientId,
+        title: `Concluida: ${title}`,
+        start_at: completedAt,
+        end_at: completedAt,
+        type: 'task_completed',
+        description: `Conclusao real da atividade: ${title}`,
         participant_ids: [],
       },
       { onConflict: 'id' },
@@ -468,8 +685,12 @@ export async function createSprintTask(taskData: {
   backlogItemId?: number | null;
   title: string;
   description?: string;
+  contextNotes?: string;
+  subtasks?: JsonSubtask[];
+  attachments?: JsonAttachment[];
   startDate?: string;
   endDate?: string;
+  dueDate?: string;
   taskOrder?: number;
 }) {
   const { data, error } = await supabase
@@ -479,8 +700,12 @@ export async function createSprintTask(taskData: {
       backlog_item_id: taskData.backlogItemId ?? null,
       title: taskData.title,
       description: taskData.description,
+      context_notes: taskData.contextNotes,
+      subtasks: taskData.subtasks ?? [],
+      attachments: taskData.attachments ?? [],
       start_date: taskData.startDate,
       end_date: taskData.endDate,
+      due_date: taskData.dueDate,
       week_number: 0,
       task_order: taskData.taskOrder || 0,
       is_completed: false,
@@ -489,10 +714,61 @@ export async function createSprintTask(taskData: {
     .single();
 
   if (error) throw error;
+
+  if (data?.backlog_item_id) {
+    await updateSprintBacklogItem(data.backlog_item_id, {
+      sprintId: data.sprint_id,
+      title: data.title,
+      details: data.description || undefined,
+      dueDate: data.due_date || undefined,
+    });
+  }
+
+  const { data: sprintData, error: sprintError } = await supabase
+    .from('sprints')
+    .select('client_id, name')
+    .eq('id', data.sprint_id)
+    .single();
+
+  if (sprintError) throw sprintError;
+
+  await notifyClientUsers(sprintData.client_id, {
+    type: 'sprint_update',
+    category: 'activities',
+    eventType: 'sprint.task.created',
+    title: `Nova atividade na sprint ${sprintData.name}`,
+    message: data.title,
+    linkTo: '/sprints',
+    sourceEntityType: 'sprint_task',
+    sourceEntityId: data.id,
+    metadata: {
+      sprint_id: data.sprint_id,
+      backlog_item_id: data.backlog_item_id,
+    },
+  }).catch(console.error);
+
   return data;
 }
 
-export async function updateSprintTask(taskId: number, updates: { isCompleted?: boolean; title?: string; description?: string }) {
+export async function updateSprintTask(taskId: number, updates: {
+  isCompleted?: boolean;
+  title?: string;
+  description?: string;
+  contextNotes?: string;
+  subtasks?: JsonSubtask[];
+  attachments?: JsonAttachment[];
+  dueDate?: string;
+  endDate?: string;
+  clientId?: number;
+}) {
+  const existing = await supabase
+    .from('sprint_tasks')
+    .select('id, sprint_id, backlog_item_id, title, description, context_notes, subtasks, attachments, due_date, completed_at')
+    .eq('id', taskId)
+    .single();
+
+  if (existing.error) throw existing.error;
+
   const payload: Record<string, unknown> = {};
   if (updates.isCompleted !== undefined) {
     payload.is_completed = updates.isCompleted;
@@ -500,13 +776,65 @@ export async function updateSprintTask(taskId: number, updates: { isCompleted?: 
   }
   if (updates.title !== undefined) payload.title = updates.title;
   if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.contextNotes !== undefined) payload.context_notes = updates.contextNotes;
+  if (updates.subtasks !== undefined) payload.subtasks = updates.subtasks;
+  if (updates.attachments !== undefined) payload.attachments = updates.attachments;
+  if (updates.dueDate !== undefined) payload.due_date = updates.dueDate;
+  if (updates.endDate !== undefined) payload.end_date = updates.endDate;
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('sprint_tasks')
     .update(payload)
-    .eq('id', taskId);
+    .eq('id', taskId)
+    .select('*')
+    .single();
 
   if (error) throw error;
+
+  if (data?.backlog_item_id) {
+    await updateSprintBacklogItem(data.backlog_item_id, {
+      status: updates.isCompleted === undefined ? undefined : updates.isCompleted ? 'done' : 'in_progress',
+      sprintId: data.sprint_id,
+      title: updates.title ?? data.title,
+      details: updates.description ?? data.description ?? undefined,
+      dueDate: updates.dueDate ?? data.due_date ?? undefined,
+    });
+  }
+
+  if (updates.isCompleted && updates.clientId) {
+    await upsertTaskCompletionCalendarEvent(
+      updates.clientId,
+      taskId,
+      updates.title ?? existing.data.title,
+      new Date().toISOString(),
+    );
+  }
+
+  const { data: sprintData, error: sprintError } = await supabase
+    .from('sprints')
+    .select('client_id, name')
+    .eq('id', data.sprint_id)
+    .single();
+
+  if (sprintError) throw sprintError;
+
+  await notifyClientUsers(sprintData.client_id, {
+    type: 'sprint_update',
+    category: 'activities',
+    eventType: updates.isCompleted ? 'sprint.task.completed' : 'sprint.task.updated',
+    title: updates.isCompleted ? `Atividade concluida na sprint ${sprintData.name}` : `Atividade atualizada na sprint ${sprintData.name}`,
+    message: data.title,
+    linkTo: '/sprints',
+    sourceEntityType: 'sprint_task',
+    sourceEntityId: data.id,
+    metadata: {
+      sprint_id: data.sprint_id,
+      backlog_item_id: data.backlog_item_id,
+      is_completed: data.is_completed,
+    },
+  }).catch(console.error);
+
+  return data;
 }
 
 export async function deleteSprintTask(taskId: number) {
@@ -558,6 +886,9 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
   clientId?: number;
   title?: string;
   details?: string;
+  contextNotes?: string;
+  subtasks?: JsonSubtask[];
+  attachments?: JsonAttachment[];
   dueDate?: string;
 }) {
   const payload: Record<string, unknown> = {};
@@ -565,16 +896,75 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
   if (updates.sprintId !== undefined) payload.sprint_id = updates.sprintId;
   if (updates.title !== undefined) payload.title = updates.title;
   if (updates.details !== undefined) payload.details = updates.details;
+  if (updates.contextNotes !== undefined) payload.context_notes = updates.contextNotes;
+  if (updates.subtasks !== undefined) payload.subtasks = updates.subtasks;
+  if (updates.attachments !== undefined) payload.attachments = updates.attachments;
+  if (updates.status === 'done') payload.completed_at = new Date().toISOString();
+  if (updates.status && updates.status !== 'done') payload.completed_at = null;
+  if (updates.dueDate !== undefined) payload.due_date = updates.dueDate;
 
-  const { error } = await supabase
+  const existingTask = await supabase
+    .from('sprint_tasks')
+    .select('id, sprint_id')
+    .eq('backlog_item_id', backlogId)
+    .maybeSingle();
+
+  if (existingTask.error) throw existingTask.error;
+
+  const { data, error } = await supabase
     .from('sprint_backlog')
     .update(payload)
-    .eq('id', backlogId);
+    .eq('id', backlogId)
+    .select('*')
+    .single();
 
   if (error) throw error;
+
+  if (existingTask.data) {
+    const taskPayload: Record<string, unknown> = {};
+    if (updates.title !== undefined) taskPayload.title = updates.title;
+    if (updates.details !== undefined) taskPayload.description = updates.details;
+    if (updates.contextNotes !== undefined) taskPayload.context_notes = updates.contextNotes;
+    if (updates.subtasks !== undefined) taskPayload.subtasks = updates.subtasks;
+    if (updates.attachments !== undefined) taskPayload.attachments = updates.attachments;
+    if (updates.dueDate !== undefined) taskPayload.due_date = updates.dueDate;
+    if (updates.status !== undefined) {
+      taskPayload.is_completed = updates.status === 'done';
+      taskPayload.completed_at = updates.status === 'done' ? new Date().toISOString() : null;
+    }
+    if (Object.keys(taskPayload).length) {
+      const { error: syncError } = await supabase
+        .from('sprint_tasks')
+        .update(taskPayload)
+        .eq('id', existingTask.data.id);
+      if (syncError) throw syncError;
+    }
+  }
+
   if (updates.dueDate && updates.clientId && updates.title) {
     upsertBacklogCalendarEvent(updates.clientId, backlogId, updates.title, updates.dueDate).catch(console.error);
   }
+
+  if (updates.status === 'done' && updates.clientId && (updates.title || data?.title)) {
+    upsertTaskCompletionCalendarEvent(updates.clientId, existingTask.data?.id || backlogId, updates.title || data.title, new Date().toISOString()).catch(console.error);
+  }
+
+  await notifyClientUsers(data.client_id, {
+    type: 'activity_update',
+    category: 'activities',
+    eventType: updates.status === 'done' ? 'backlog.item.completed' : 'backlog.item.updated',
+    title: updates.status === 'done' ? 'Item do backlog concluido' : 'Item do backlog atualizado',
+    message: data.title,
+    linkTo: '/kanban',
+    sourceEntityType: 'sprint_backlog',
+    sourceEntityId: data.id,
+    metadata: {
+      sprint_id: data.sprint_id,
+      status: data.status,
+    },
+  }).catch(console.error);
+
+  return data;
 }
 
 export async function createSprintBacklogItem(itemData: {
@@ -582,6 +972,9 @@ export async function createSprintBacklogItem(itemData: {
   sprintId?: number | null;
   title: string;
   details?: string;
+  contextNotes?: string;
+  subtasks?: JsonSubtask[];
+  attachments?: JsonAttachment[];
   occurredOn?: string;
   dueDate?: string;
 }) {
@@ -595,6 +988,9 @@ export async function createSprintBacklogItem(itemData: {
       sprint_id: itemData.sprintId ?? null,
       title: itemData.title,
       details: itemData.details,
+      context_notes: itemData.contextNotes,
+      subtasks: itemData.subtasks ?? [],
+      attachments: itemData.attachments ?? [],
       occurred_on: itemData.occurredOn,
       due_date: itemData.dueDate,
       status: 'planned',
@@ -607,6 +1003,210 @@ export async function createSprintBacklogItem(itemData: {
   if (itemData.dueDate && data) {
     upsertBacklogCalendarEvent(itemData.clientId, data.id, itemData.title, itemData.dueDate).catch(console.error);
   }
+
+  await notifyClientUsers(itemData.clientId, {
+    type: 'activity_update',
+    category: 'activities',
+    eventType: 'backlog.item.created',
+    title: 'Novo item no backlog',
+    message: data.title,
+    linkTo: '/kanban',
+    sourceEntityType: 'sprint_backlog',
+    sourceEntityId: data.id,
+    metadata: {
+      sprint_id: data.sprint_id,
+      created_by_user_id: user.id,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
+  return data;
+}
+
+export async function createChatGroupRoom(clientId: number, payload: {
+  name: string;
+  participantIds: number[];
+}) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const participantIds = dedupeNumberList([user.id, ...payload.participantIds]).sort((a, b) => a - b);
+
+  const { data: room, error: roomError } = await supabase
+    .from('chat_rooms')
+    .insert({
+      client_id: clientId,
+      room_type: 'group',
+      name: payload.name.trim(),
+      created_by_user_id: user.id,
+    })
+    .select('*')
+    .single();
+
+  if (roomError) throw roomError;
+
+  await syncRoomParticipants(
+    room.id,
+    participantIds.map((participantId) => ({
+      user_id: participantId,
+      added_by_user_id: user.id,
+      is_admin: participantId === user.id,
+    })),
+  );
+
+  await notifyClientUsers(clientId, {
+    type: 'chat_message',
+    category: 'chat',
+    eventType: 'chat.group.created',
+    title: `Novo grupo criado: ${room.name}`,
+    message: `${participantIds.length} participantes`,
+    linkTo: '/tickets',
+    sourceEntityType: 'chat_room',
+    sourceEntityId: room.id,
+    metadata: {
+      room_type: room.room_type,
+      participant_ids: participantIds,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
+  return room;
+}
+
+export async function getChatRoomParticipants(roomId: number) {
+  const { data, error } = await supabase
+    .from('chat_room_participants')
+    .select('*, user:users!chat_room_participants_user_id_fkey(name, role)')
+    .eq('room_id', roomId)
+    .order('joined_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((participant: any) => ({
+    ...participant,
+    user_name: participant.user?.name,
+    user_role: participant.user?.role,
+  }));
+}
+
+export async function addChatRoomParticipants(roomId: number, participantIds: number[]) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const { data: room, error: roomError } = await supabase
+    .from('chat_rooms')
+    .select('id, room_type, client_id, name')
+    .eq('id', roomId)
+    .single();
+
+  if (roomError) throw roomError;
+  if (room.room_type !== 'group') {
+    throw new Error('Somente grupos permitem adicionar participantes manualmente.');
+  }
+
+  const uniqueParticipantIds = dedupeNumberList(participantIds);
+  await syncRoomParticipants(
+    roomId,
+    uniqueParticipantIds.map((participantId) => ({
+      user_id: participantId,
+      added_by_user_id: user.id,
+      is_admin: false,
+    })),
+  );
+
+  await notifyClientUsers(room.client_id, {
+    type: 'chat_message',
+    category: 'chat',
+    eventType: 'chat.group.participants_added',
+    title: `Participantes adicionados em ${room.name}`,
+    message: `${uniqueParticipantIds.length} novo(s) participante(s)`,
+    linkTo: '/tickets',
+    sourceEntityType: 'chat_room',
+    sourceEntityId: room.id,
+    metadata: {
+      participant_ids: uniqueParticipantIds,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
+  return true;
+}
+
+export async function removeChatRoomParticipant(roomId: number, participantId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const { data: room, error: roomError } = await supabase
+    .from('chat_rooms')
+    .select('id, room_type, client_id, name')
+    .eq('id', roomId)
+    .single();
+
+  if (roomError) throw roomError;
+  if (room.room_type !== 'group') {
+    throw new Error('Somente grupos permitem remover participantes manualmente.');
+  }
+
+  const { error } = await supabase
+    .from('chat_room_participants')
+    .delete()
+    .eq('room_id', roomId)
+    .eq('user_id', participantId);
+
+  if (error) throw error;
+
+  await notifyClientUsers(room.client_id, {
+    type: 'chat_message',
+    category: 'chat',
+    eventType: 'chat.group.participant_removed',
+    title: `Participante removido de ${room.name}`,
+    message: `Usuario ${participantId} removido do grupo`,
+    linkTo: '/tickets',
+    sourceEntityType: 'chat_room',
+    sourceEntityId: room.id,
+    metadata: {
+      participant_id: participantId,
+      removed_by_user_id: user.id,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
+  return true;
+}
+
+export async function createNotificationEvent(payload: {
+  userId: number;
+  type: string;
+  category: string;
+  eventType: string;
+  title: string;
+  message?: string;
+  linkTo?: string;
+  sourceEntityType?: string;
+  sourceEntityId?: number;
+  occurredAt?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: payload.userId,
+      type: payload.type,
+      category: payload.category,
+      event_type: payload.eventType,
+      title: payload.title,
+      message: payload.message,
+      link_to: payload.linkTo,
+      source_entity_type: payload.sourceEntityType,
+      source_entity_id: payload.sourceEntityId,
+      occurred_at: payload.occurredAt || new Date().toISOString(),
+      metadata: payload.metadata || {},
+      is_read: false,
+      read_at: null,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
   return data;
 }
 
@@ -696,6 +1296,24 @@ export async function createTicket(ticketData: {
     .single();
 
   if (error) throw error;
+
+  await notifyClientUsers(clientId, {
+    type: 'ticket_update',
+    category: 'system',
+    eventType: 'ticket.created',
+    title: `Novo ticket: ${data.title}`,
+    message: `Prioridade ${data.priority}`,
+    linkTo: '/tickets',
+    sourceEntityType: 'ticket',
+    sourceEntityId: data.id,
+    metadata: {
+      status: data.status,
+      priority: data.priority,
+      created_by_user_id: user.id,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
   return data;
 }
 
@@ -716,12 +1334,35 @@ export async function updateTicket(id: number, updates: {
     updateData.assigned_user_id = updates.assignedUserId;
   }
 
+  const currentTicket = await supabase
+    .from('tickets')
+    .select('id, client_id, title, status')
+    .eq('id', id)
+    .single();
+
+  if (currentTicket.error) throw currentTicket.error;
+
   const { error } = await supabase
     .from('tickets')
     .update(updateData)
     .eq('id', id);
 
   if (error) throw error;
+
+  await notifyClientUsers(currentTicket.data.client_id, {
+    type: 'ticket_update',
+    category: 'system',
+    eventType: updates.status ? 'ticket.status.updated' : 'ticket.assignment.updated',
+    title: `Ticket atualizado: ${currentTicket.data.title}`,
+    message: updates.status ? `Novo status: ${updates.status}` : 'Responsavel atualizado',
+    linkTo: '/tickets',
+    sourceEntityType: 'ticket',
+    sourceEntityId: id,
+    metadata: {
+      status: updates.status ?? currentTicket.data.status,
+      assigned_user_id: updates.assignedUserId ?? null,
+    },
+  }).catch(console.error);
 }
 
 // ─── Ticket Messages ─────────────────────────────────────────────────
@@ -782,9 +1423,26 @@ export async function getChatRooms(clientId: number) {
 
   const rooms = (data || []).filter((room: any) => {
     if (room.room_type === 'internal' && user.role === 'client') return false;
+    if (room.room_type === 'group') return true;
     if (room.room_type !== 'direct') return true;
     return room.direct_user_a_id === user.id || room.direct_user_b_id === user.id || user.role !== 'client';
   });
+
+  const groupRoomIds = rooms.filter((room: any) => room.room_type === 'group').map((room: any) => room.id);
+  let groupParticipantsCount: Record<number, number> = {};
+  if (groupRoomIds.length) {
+    const { data: participantsData, error: participantsError } = await supabase
+      .from('chat_room_participants')
+      .select('room_id')
+      .in('room_id', groupRoomIds);
+
+    if (participantsError) throw participantsError;
+
+    groupParticipantsCount = (participantsData || []).reduce((acc: Record<number, number>, row: any) => {
+      acc[row.room_id] = (acc[row.room_id] || 0) + 1;
+      return acc;
+    }, {});
+  }
 
   const directOtherIds = Array.from(new Set(
     rooms
@@ -830,6 +1488,10 @@ export async function getChatRooms(clientId: number) {
         contact_role: person?.role || null,
       };
     })
+    .map((room: any) => ({
+      ...room,
+      participants_count: room.room_type === 'group' ? (groupParticipantsCount[room.id] || 0) : room.participants_count,
+    }))
     .sort((a: any, b: any) => (rankByType[a.room_type] || 99) - (rankByType[b.room_type] || 99));
 }
 
@@ -942,6 +1604,12 @@ export async function getOrCreateDirectChatRoom(clientId: number, contactUserId:
     .single();
 
   if (error) throw error;
+
+  await syncRoomParticipants(data.id, [
+    { user_id: userA, added_by_user_id: user.id, is_admin: userA === user.id },
+    { user_id: userB, added_by_user_id: user.id, is_admin: userB === user.id },
+  ]);
+
   return data;
 }
 
@@ -974,6 +1642,11 @@ export async function getOrCreateProjectContactRoom(clientId: number, contactNam
     .single();
 
   if (error) throw error;
+
+  await syncRoomParticipants(data.id, [
+    { user_id: user.id, added_by_user_id: user.id, is_admin: true },
+  ]);
+
   return data;
 }
 
@@ -1011,6 +1684,27 @@ export async function createChatMessage(roomId: number, message: string) {
     .single();
 
   if (error) throw error;
+
+  const { error: lastReadError } = await supabase
+    .from('chat_room_participants')
+    .update({ last_read_at: new Date().toISOString() })
+    .eq('room_id', roomId)
+    .eq('user_id', user.id);
+
+  if (lastReadError) throw lastReadError;
+
+  await notifyChatParticipants(roomId, {
+    senderUserId: user.id,
+    title: `Nova mensagem de ${user.name}`,
+    message: message.length > 120 ? `${message.slice(0, 117)}...` : message,
+    eventType: 'chat.message.created',
+    sourceEntityId: roomId,
+    metadata: {
+      room_id: roomId,
+      author_user_id: user.id,
+    },
+  }).catch(console.error);
+
   return data;
 }
 
@@ -1063,6 +1757,23 @@ export async function createDocument(docData: {
     .single();
 
   if (error) throw error;
+
+  await notifyClientUsers(docData.clientId, {
+    type: 'document',
+    category: 'documents',
+    eventType: 'document.created',
+    title: `Novo documento: ${data.title}`,
+    message: docData.fileName,
+    linkTo: '/documents',
+    sourceEntityType: 'shared_document',
+    sourceEntityId: data.id,
+    metadata: {
+      uploaded_by_user_id: user.id,
+      category: docData.category || null,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
   return data;
 }
 
@@ -1122,6 +1833,23 @@ export async function createReport(reportData: {
     .single();
 
   if (error) throw error;
+
+  await notifyClientUsers(reportData.clientId, {
+    type: 'report',
+    category: 'reports',
+    eventType: 'report.created',
+    title: `Novo relatorio: ${data.title}`,
+    message: `${reportData.periodStart} ate ${reportData.periodEnd}`,
+    linkTo: '/reports',
+    sourceEntityType: 'shared_report',
+    sourceEntityId: data.id,
+    metadata: {
+      report_type: data.type,
+      created_by_user_id: user.id,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
   return data;
 }
 
@@ -1307,6 +2035,23 @@ export async function createMeetingEvent(payload: {
     .single();
 
   if (error) throw error;
+
+  await notifyClientUsers(payload.clientId, {
+    type: 'system',
+    category: 'system',
+    eventType: 'meeting.created',
+    title: `Novo compromisso: ${data.title}`,
+    message: payload.meetingDate,
+    linkTo: '/meetings',
+    sourceEntityType: 'meeting_event',
+    sourceEntityId: data.id,
+    metadata: {
+      meeting_type: payload.meetingType,
+      created_by_user_id: user.id,
+    },
+    excludeUserIds: [user.id],
+  }).catch(console.error);
+
   return data;
 }
 
@@ -1319,7 +2064,7 @@ export async function getNotifications() {
     .from('notifications')
     .select('*')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+    .order('occurred_at', { ascending: false })
     .limit(50);
 
   if (error) throw error;
@@ -1341,9 +2086,10 @@ export async function getUnreadNotificationsCount() {
 }
 
 export async function markNotificationAsRead(id: number) {
+  const readAt = new Date().toISOString();
   const { error } = await supabase
     .from('notifications')
-    .update({ is_read: true })
+    .update({ is_read: true, read_at: readAt })
     .eq('id', id);
 
   if (error) throw error;
@@ -1353,9 +2099,11 @@ export async function markAllNotificationsAsRead() {
   const user = await getCurrentUser();
   if (!user) throw new Error('Usuário não autenticado');
 
+  const readAt = new Date().toISOString();
+
   const { error } = await supabase
     .from('notifications')
-    .update({ is_read: true })
+    .update({ is_read: true, read_at: readAt })
     .eq('user_id', user.id)
     .eq('is_read', false);
 
@@ -1452,6 +2200,20 @@ export async function createProjectContact(payload: {
     .single();
 
   if (error) throw error;
+
+  await notifyClientUsers(payload.clientId, {
+    type: 'system',
+    category: 'system',
+    eventType: 'project_contact.created',
+    title: `Novo contato do projeto: ${data.name}`,
+    message: data.role,
+    sourceEntityType: 'project_contact',
+    sourceEntityId: data.id,
+    metadata: {
+      email: data.email,
+    },
+  }).catch(console.error);
+
   return data;
 }
 
@@ -1476,6 +2238,20 @@ export async function updateProjectContact(contactId: number, payload: {
     .single();
 
   if (error) throw error;
+
+  await notifyClientUsers(data.client_id, {
+    type: 'system',
+    category: 'system',
+    eventType: 'project_contact.updated',
+    title: `Contato atualizado: ${data.name}`,
+    message: data.role,
+    sourceEntityType: 'project_contact',
+    sourceEntityId: data.id,
+    metadata: {
+      email: data.email,
+    },
+  }).catch(console.error);
+
   return data;
 }
 

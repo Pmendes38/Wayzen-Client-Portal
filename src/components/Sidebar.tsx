@@ -4,13 +4,16 @@ import {
   LayoutDashboard, Ticket, FileText, FolderOpen,
   BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, CalendarDays, KanbanSquare, ShieldCheck, Users
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ThemeToggle from './ThemeToggle';
+import { portalService } from '@/lib/services/portal';
+import { countUnreadByReadAt, subscribeNotificationsUnreadCount } from '@/lib/notificationsRealtime';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
   const handleLogout = async () => {
     await logout();
@@ -18,6 +21,28 @@ export default function Sidebar() {
   };
 
   const isInternal = user?.role === 'admin' || user?.role === 'consultant';
+
+  useEffect(() => {
+    let mounted = true;
+
+    portalService
+      .getNotifications()
+      .then((data) => {
+        if (!mounted) return;
+        setUnreadNotificationsCount(countUnreadByReadAt(data));
+      })
+      .catch(console.error);
+
+    const unsubscribe = subscribeNotificationsUnreadCount((count) => {
+      if (!mounted) return;
+      setUnreadNotificationsCount(count);
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   const navItems = isInternal
     ? [
@@ -76,7 +101,7 @@ export default function Sidebar() {
       <nav className="flex-1 py-4 px-2 space-y-1">
         {navItems.map(item => (
           <NavLink
-            key={item.to}
+            key={`${item.to}-${item.label}`}
             to={item.to}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
@@ -87,7 +112,12 @@ export default function Sidebar() {
             }
           >
             <item.icon size={20} />
-            {!collapsed && <span>{item.label}</span>}
+            {!collapsed && <span className="truncate">{item.label}</span>}
+            {item.to === '/notifications' && unreadNotificationsCount > 0 && (
+              <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-wayzen-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

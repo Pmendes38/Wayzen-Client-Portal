@@ -2,8 +2,41 @@ import { useEffect, useState } from 'react';
 import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import PageLoader from '@/components/PageLoader';
+import ActivityEditorPanel, {
+  ActivityEditorSyncState,
+  ActivityEditorValue,
+} from '@/components/ActivityEditorPanel';
 import { Sprint, SprintTask } from '@/types/domain';
-import { CalendarDays, Check, CheckCircle2, Circle, Edit2, Plus, Trash2, X } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Circle, Edit2, Link2, Paperclip, Plus, Trash2, X } from 'lucide-react';
+
+type TaskEditorState =
+  | { mode: 'create'; sprintId: number }
+  | { mode: 'edit'; sprintId: number; task: SprintTask }
+  | null;
+
+function buildTaskEditorValue(sprintId: number, task?: SprintTask): ActivityEditorValue {
+  return {
+    title: task?.title || '',
+    description: task?.description || '',
+    contextNotes: task?.context_notes || '',
+    sprintId: String(task?.sprint_id || sprintId),
+    occurredOn: '',
+    startDate: task?.start_date || '',
+    endDate: task?.end_date || '',
+    dueDate: task?.due_date || '',
+    subtasks: task?.subtasks || [],
+    attachments: task?.attachments || [],
+  };
+}
+
+function getTaskBadgeData(task: SprintTask) {
+  return {
+    subtaskCount: task.subtasks?.length || 0,
+    completedSubtasks: (task.subtasks || []).filter((subtask) => subtask.done).length,
+    attachmentCount: task.attachments?.length || 0,
+    isLinked: Boolean(task.backlog_item_id),
+  };
+}
 
 export default function Sprints() {
   const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
@@ -11,21 +44,13 @@ export default function Sprints() {
   const [tasks, setTasks] = useState<Record<number, SprintTask[]>>({});
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [syncState, setSyncState] = useState<ActivityEditorSyncState>('idle');
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
-  // New sprint form (internal only)
   const [newSprint, setNewSprint] = useState({ name: '', weekNumber: 1, startDate: '', endDate: '', notes: '' });
-
-  // Sprint inline edit
   const [editingSprintId, setEditingSprintId] = useState<number | null>(null);
   const [editSprintForm, setEditSprintForm] = useState({ name: '', startDate: '', endDate: '', notes: '' });
-
-  // Task inline edit
-  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
-  const [editTaskTitle, setEditTaskTitle] = useState('');
-
-  // New task form per sprint
-  const [addingTaskToSprint, setAddingTaskToSprint] = useState<number | null>(null);
-  const [newTask, setNewTask] = useState({ title: '', description: '' });
+  const [taskEditorState, setTaskEditorState] = useState<TaskEditorState>(null);
 
   useEffect(() => {
     if (loadingClients) return;
@@ -40,10 +65,20 @@ export default function Sprints() {
       .finally(() => setLoading(false));
   }, [activeClientId, loadingClients]);
 
-  const loadSprintTasks = async (sprintId: number) => {
-    if (tasks[sprintId]) return;
+  const refreshSprints = async () => {
+    if (!activeClientId) return;
+    const data = await portalService.getSprints(activeClientId);
+    setSprints(data as Sprint[]);
+  };
+
+  const loadSprintTasks = async (sprintId: number, force = false) => {
+    if (!force && tasks[sprintId]) return;
     const data = await portalService.getSprintTasks(sprintId);
     setTasks((prev) => ({ ...prev, [sprintId]: data }));
+  };
+
+  const showSyncNotice = (message: string) => {
+    setSyncNotice(message);
   };
 
   const toggleSprint = (sprintId: number) => {
@@ -62,8 +97,7 @@ export default function Sprints() {
       endDate: newSprint.endDate || undefined,
       notes: newSprint.notes || undefined,
     });
-    const data = await portalService.getSprints(activeClientId);
-    setSprints(data as Sprint[]);
+    await refreshSprints();
     setNewSprint({ name: '', weekNumber: 1, startDate: '', endDate: '', notes: '' });
   };
 
@@ -86,67 +120,30 @@ export default function Sprints() {
       endDate: editSprintForm.endDate || undefined,
       notes: editSprintForm.notes || undefined,
     });
-    const data = await portalService.getSprints(activeClientId);
-    setSprints(data as Sprint[]);
+    await refreshSprints();
     setEditingSprintId(null);
   };
 
-  const toggleTask = async (sprintId: number, taskId: number, current: boolean) => {
-    await portalService.updateSprintTask(taskId, { isCompleted: !current });
-    setTasks((prev) => ({
-      ...prev,
-      [sprintId]: (prev[sprintId] || []).map((t) =>
-        t.id === taskId ? { ...t, is_completed: !current } : t
-      ),
-    }));
-  };
-
-  const startEditTask = (task: SprintTask) => {
-    setEditingTaskId(task.id);
-    setEditTaskTitle(task.title);
-  };
-
-  const saveEditTask = async (sprintId: number, taskId: number) => {
-    if (!editTaskTitle.trim()) { setEditingTaskId(null); return; }
-    await portalService.updateSprintTask(taskId, { title: editTaskTitle.trim() });
-    setTasks((prev) => ({
-      ...prev,
-      [sprintId]: (prev[sprintId] || []).map((t) =>
-        t.id === taskId ? { ...t, title: editTaskTitle.trim() } : t
-      ),
-    }));
-    setEditingTaskId(null);
-  };
-
-  const addTaskToSprint = async (sprintId: number) => {
-    if (!newTask.title.trim() || !activeClientId) return;
-
-    // Keep sprint activities reflected in Kanban by creating a linked backlog item first.
-    const backlogItem = await portalService.createSprintBacklogItem({
-      clientId: activeClientId,
-      sprintId,
-      title: newTask.title.trim(),
-      details: newTask.description || undefined,
-      occurredOn: new Date().toISOString().slice(0, 10),
-    });
-
-    await portalService.createSprintTask({
-      sprintId,
-      backlogItemId: (backlogItem as any)?.id,
-      title: newTask.title.trim(),
-      description: newTask.description,
-    });
-    const data = await portalService.getSprintTasks(sprintId);
-    setTasks((prev) => ({ ...prev, [sprintId]: data }));
-    setNewTask({ title: '', description: '' });
-    setAddingTaskToSprint(null);
+  const toggleTask = async (sprintId: number, task: SprintTask) => {
+    setSyncState('syncing');
+    try {
+      await portalService.updateSprintTask(task.id, {
+        isCompleted: !task.is_completed,
+        clientId: activeClientId || undefined,
+      });
+      await loadSprintTasks(sprintId, true);
+      showSyncNotice('Atualizado no Kanban');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSyncState('idle');
+    }
   };
 
   const removeSprint = async (sprintId: number) => {
     if (!isInternal || !activeClientId) return;
     await portalService.deleteSprint(sprintId);
-    const data = await portalService.getSprints(activeClientId);
-    setSprints(data as Sprint[]);
+    await refreshSprints();
     setTasks((prev) => {
       const next = { ...prev };
       delete next[sprintId];
@@ -161,11 +158,75 @@ export default function Sprints() {
 
   const removeTask = async (sprintId: number, taskId: number) => {
     if (!isInternal) return;
-    await portalService.deleteSprintTask(taskId);
-    setTasks((prev) => ({
-      ...prev,
-      [sprintId]: (prev[sprintId] || []).filter((task) => task.id !== taskId),
-    }));
+    setSyncState('syncing');
+    try {
+      await portalService.deleteSprintTask(taskId);
+      await loadSprintTasks(sprintId, true);
+      showSyncNotice('Atualizado no Kanban');
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setSyncState('idle');
+    }
+  };
+
+  const saveTaskFromEditor = async (values: ActivityEditorValue) => {
+    if (!taskEditorState || !activeClientId) return;
+
+    setSyncState('saving');
+
+    try {
+      if (taskEditorState.mode === 'create') {
+        const backlogItem = await portalService.createSprintBacklogItem({
+          clientId: activeClientId,
+          sprintId: taskEditorState.sprintId,
+          title: values.title.trim(),
+          details: values.description || undefined,
+          contextNotes: values.contextNotes || undefined,
+          subtasks: values.subtasks,
+          attachments: values.attachments,
+          occurredOn: values.startDate || new Date().toISOString().slice(0, 10),
+          dueDate: values.dueDate || undefined,
+        });
+
+        setSyncState('syncing');
+
+        await portalService.createSprintTask({
+          sprintId: taskEditorState.sprintId,
+          backlogItemId: (backlogItem as { id: number }).id,
+          title: values.title.trim(),
+          description: values.description || undefined,
+          contextNotes: values.contextNotes || undefined,
+          subtasks: values.subtasks,
+          attachments: values.attachments,
+          startDate: values.startDate || undefined,
+          endDate: values.endDate || undefined,
+          dueDate: values.dueDate || undefined,
+        });
+
+        await loadSprintTasks(taskEditorState.sprintId, true);
+      } else {
+        await portalService.updateSprintTask(taskEditorState.task.id, {
+          title: values.title.trim(),
+          description: values.description || undefined,
+          contextNotes: values.contextNotes || undefined,
+          subtasks: values.subtasks,
+          attachments: values.attachments,
+          dueDate: values.dueDate || undefined,
+          endDate: values.endDate || undefined,
+          clientId: activeClientId,
+        });
+
+        setSyncState('syncing');
+        await loadSprintTasks(taskEditorState.sprintId, true);
+      }
+
+      setExpanded((prev) => ({ ...prev, [taskEditorState.sprintId]: true }));
+      setTaskEditorState(null);
+      showSyncNotice('Atualizado no Kanban');
+    } finally {
+      setSyncState('idle');
+    }
   };
 
   if (loading || loadingClients) return <PageLoader />;
@@ -187,6 +248,15 @@ export default function Sprints() {
         </p>
       </div>
 
+      {syncNotice && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
+          <span>{syncNotice}</span>
+          <button type="button" onClick={() => setSyncNotice(null)} className="rounded-md p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/20">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {isInternal && (
         <div className="card p-4 mb-4">
           <h2 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Nova Sprint</h2>
@@ -200,19 +270,22 @@ export default function Sprints() {
             <input
               value={newSprint.weekNumber}
               onChange={(e) => setNewSprint((prev) => ({ ...prev, weekNumber: Number(e.target.value) || 1 }))}
-              type="number" min={1}
+              type="number"
+              min={1}
               className="input-field"
               placeholder="Semana"
             />
             <input
               value={newSprint.startDate}
               onChange={(e) => setNewSprint((prev) => ({ ...prev, startDate: e.target.value }))}
-              type="date" className="input-field"
+              type="date"
+              className="input-field"
             />
             <input
               value={newSprint.endDate}
               onChange={(e) => setNewSprint((prev) => ({ ...prev, endDate: e.target.value }))}
-              type="date" className="input-field"
+              type="date"
+              className="input-field"
             />
           </div>
           <textarea
@@ -230,7 +303,7 @@ export default function Sprints() {
       <div className="space-y-4">
         {sprints.map((sprint) => {
           const sprintTasks = tasks[sprint.id] || [];
-          const completedTasks = sprintTasks.filter((t) => t.is_completed).length;
+          const completedTasks = sprintTasks.filter((task) => task.is_completed).length;
           const totalTasks = sprintTasks.length;
           const progress = totalTasks ? Math.round((completedTasks / totalTasks) * 100) : 0;
           const isEditing = editingSprintId === sprint.id;
@@ -246,12 +319,18 @@ export default function Sprints() {
                     placeholder="Editar nome da sprint"
                   />
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="date" value={editSprintForm.startDate}
+                    <input
+                      type="date"
+                      value={editSprintForm.startDate}
                       onChange={(e) => setEditSprintForm((prev) => ({ ...prev, startDate: e.target.value }))}
-                      className="input-field" />
-                    <input type="date" value={editSprintForm.endDate}
+                      className="input-field"
+                    />
+                    <input
+                      type="date"
+                      value={editSprintForm.endDate}
                       onChange={(e) => setEditSprintForm((prev) => ({ ...prev, endDate: e.target.value }))}
-                      className="input-field" />
+                      className="input-field"
+                    />
                   </div>
                   <textarea
                     value={editSprintForm.notes}
@@ -268,9 +347,9 @@ export default function Sprints() {
                 <div
                   className="w-full p-5 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
                   onClick={() => toggleSprint(sprint.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
                       toggleSprint(sprint.id);
                     }
                   }}
@@ -290,14 +369,14 @@ export default function Sprints() {
                     {isInternal && (
                       <>
                         <button
-                          onClick={(e) => { e.stopPropagation(); startEditSprint(sprint); }}
+                          onClick={(event) => { event.stopPropagation(); startEditSprint(sprint); }}
                           className="p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-400 dark:text-slate-500"
                           aria-label="Editar sprint"
                         >
                           <Edit2 size={14} />
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); removeSprint(sprint.id).catch(console.error); }}
+                          onClick={(event) => { event.stopPropagation(); removeSprint(sprint.id).catch(console.error); }}
                           className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500"
                           aria-label="Excluir sprint"
                         >
@@ -314,10 +393,7 @@ export default function Sprints() {
                   {totalTasks > 0 && (
                     <>
                       <div className="mb-2 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700">
-                        <div
-                          className="h-1.5 rounded-full bg-emerald-400 transition-all duration-300"
-                          style={{ width: `${progress}%` }}
-                        />
+                        <div className="h-1.5 rounded-full bg-emerald-400 transition-all duration-300" style={{ width: `${progress}%` }} />
                       </div>
                       <p className="text-xs text-gray-400 dark:text-slate-500 mb-4">
                         {completedTasks} de {totalTasks} atividades concluidas ({progress}%)
@@ -325,71 +401,89 @@ export default function Sprints() {
                     </>
                   )}
 
-                  <div className="space-y-2">
-                    {sprintTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-3 flex items-center gap-3"
-                      >
-                        <button
-                          onClick={() => toggleTask(sprint.id, task.id, task.is_completed)}
-                          className="shrink-0"
-                          aria-label={task.is_completed ? 'Desmarcar como concluida' : 'Marcar como concluida'}
-                        >
-                          {task.is_completed
-                            ? <CheckCircle2 size={17} className="text-emerald-500" />
-                            : <Circle size={17} className="text-gray-300 dark:text-slate-600 hover:text-wayzen-400 transition-colors" />
-                          }
-                        </button>
+                  <div className="space-y-3">
+                    {sprintTasks.map((task) => {
+                      const badgeData = getTaskBadgeData(task);
 
-                        {editingTaskId === task.id ? (
-                          <div className="flex-1 flex items-center gap-2">
-                            <input
-                              autoFocus
-                              value={editTaskTitle}
-                              onChange={(e) => setEditTaskTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveEditTask(sprint.id, task.id);
-                                if (e.key === 'Escape') setEditingTaskId(null);
-                              }}
-                              className="input-field py-1 text-sm flex-1"
-                            />
-                            <button onClick={() => saveEditTask(sprint.id, task.id)} className="btn-primary py-1 px-2">
-                              <Check size={13} />
-                            </button>
-                            <button onClick={() => setEditingTaskId(null)} className="btn-secondary py-1 px-2">
-                              <X size={13} />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <span
-                              className={`flex-1 text-sm ${task.is_completed ? 'line-through text-gray-400 dark:text-slate-500' : 'text-gray-800 dark:text-slate-200'}`}
+                      return (
+                        <div key={task.id} className="rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 p-4">
+                          <div className="flex items-start gap-3">
+                            <button
+                              onClick={() => toggleTask(sprint.id, task).catch(console.error)}
+                              className="shrink-0 mt-1"
+                              disabled={syncState !== 'idle'}
+                              aria-label={task.is_completed ? 'Desmarcar como concluida' : 'Marcar como concluida'}
                             >
-                              {task.title}
-                            </span>
-                            {isInternal && (
-                              <div className="shrink-0 flex items-center gap-1">
-                                <button
-                                  onClick={() => startEditTask(task)}
-                                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-300 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-400 transition-colors"
-                                  aria-label="Editar atividade"
-                                >
-                                  <Edit2 size={12} />
-                                </button>
-                                <button
-                                  onClick={() => removeTask(sprint.id, task.id).catch(console.error)}
-                                  className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
-                                  aria-label="Excluir atividade"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
+                              {task.is_completed
+                                ? <CheckCircle2 size={17} className="text-emerald-500" />
+                                : <Circle size={17} className="text-gray-300 dark:text-slate-600 hover:text-wayzen-400 transition-colors" />}
+                            </button>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className={`text-sm font-semibold ${task.is_completed ? 'line-through text-gray-400 dark:text-slate-500' : 'text-gray-800 dark:text-slate-100'}`}>
+                                    {task.title}
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    {badgeData.isLinked && (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-wayzen-50 px-2.5 py-1 text-[11px] font-semibold text-wayzen-700 dark:bg-wayzen-900/30 dark:text-wayzen-300">
+                                        <Link2 size={12} /> Sincronizada com Kanban
+                                      </span>
+                                    )}
+                                    {task.due_date && (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                        <CalendarDays size={12} /> {new Date(task.due_date).toLocaleDateString('pt-BR')}
+                                      </span>
+                                    )}
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                      {badgeData.completedSubtasks}/{badgeData.subtaskCount} subtarefas
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                      <Paperclip size={11} /> {badgeData.attachmentCount} anexos
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {isInternal && (
+                                  <div className="shrink-0 flex items-center gap-1">
+                                    <button
+                                      onClick={() => setTaskEditorState({ mode: 'edit', sprintId: sprint.id, task })}
+                                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-300 dark:text-slate-600 hover:text-gray-500 dark:hover:text-slate-400 transition-colors"
+                                      aria-label="Editar atividade"
+                                      disabled={syncState !== 'idle'}
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => removeTask(sprint.id, task.id).catch(console.error)}
+                                      className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                                      aria-label="Excluir atividade"
+                                      disabled={syncState !== 'idle'}
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    ))}
+
+                              {(task.description || task.context_notes) && (
+                                <div className="mt-3 space-y-2">
+                                  {task.description && (
+                                    <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{task.description}</p>
+                                  )}
+                                  {task.context_notes && (
+                                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                      {task.context_notes}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
 
                     {!sprintTasks.length && (
                       <p className="text-sm text-gray-400 dark:text-slate-500">Nenhuma atividade cadastrada para esta sprint.</p>
@@ -398,35 +492,13 @@ export default function Sprints() {
 
                   {isInternal && (
                     <div className="mt-4">
-                      {addingTaskToSprint === sprint.id ? (
-                        <div className="space-y-2">
-                          <input
-                            autoFocus
-                            value={newTask.title}
-                            onChange={(e) => setNewTask((prev) => ({ ...prev, title: e.target.value }))}
-                            onKeyDown={(e) => { if (e.key === 'Enter') addTaskToSprint(sprint.id); }}
-                            className="input-field"
-                            placeholder="Titulo da atividade"
-                          />
-                          <textarea
-                            value={newTask.description}
-                            onChange={(e) => setNewTask((prev) => ({ ...prev, description: e.target.value }))}
-                            className="input-field h-16"
-                            placeholder="Descricao (opcional)"
-                          />
-                          <div className="flex gap-2">
-                            <button onClick={() => addTaskToSprint(sprint.id)} className="btn-primary">Adicionar</button>
-                            <button onClick={() => { setAddingTaskToSprint(null); setNewTask({ title: '', description: '' }); }} className="btn-secondary">Cancelar</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setAddingTaskToSprint(sprint.id)}
-                          className="btn-secondary text-sm w-full justify-center"
-                        >
-                          <Plus size={14} /> Nova atividade
-                        </button>
-                      )}
+                      <button
+                        onClick={() => setTaskEditorState({ mode: 'create', sprintId: sprint.id })}
+                        className="btn-secondary text-sm w-full justify-center"
+                        disabled={syncState !== 'idle'}
+                      >
+                        <Plus size={14} /> Nova atividade
+                      </button>
                     </div>
                   )}
                 </div>
@@ -441,6 +513,24 @@ export default function Sprints() {
           </div>
         )}
       </div>
+
+      {taskEditorState && (
+        <ActivityEditorPanel
+          key={`${taskEditorState.mode}-${taskEditorState.sprintId}-${taskEditorState.mode === 'edit' ? taskEditorState.task.id : 'new'}`}
+          isOpen
+          kind="task"
+          title={taskEditorState.mode === 'create' ? 'Nova atividade da sprint' : 'Editar atividade da sprint'}
+          initialValue={buildTaskEditorValue(taskEditorState.sprintId, taskEditorState.mode === 'edit' ? taskEditorState.task : undefined)}
+          sprints={sprints}
+          saving={syncState === 'saving'}
+          syncState={syncState}
+          onClose={() => {
+            if (syncState !== 'idle') return;
+            setTaskEditorState(null);
+          }}
+          onSave={saveTaskFromEditor}
+        />
+      )}
     </div>
   );
 }

@@ -25,15 +25,35 @@ export interface Sprint {
   notes?: string | null;
 }
 
+export interface SprintSubtask {
+  id: string;
+  title: string;
+  done: boolean;
+  created_at: string;
+}
+
+export interface SprintAttachment {
+  id: string;
+  name: string;
+  url: string;
+  type?: string | null;
+  uploaded_at: string;
+}
+
 export interface SprintTask {
   id: number;
   sprint_id: number;
   backlog_item_id?: number | null;
   title: string;
   description?: string | null;
+  context_notes?: string | null;
+  subtasks?: SprintSubtask[];
+  attachments?: SprintAttachment[];
   start_date?: string | null;
   end_date?: string | null;
+  due_date?: string | null;
   is_completed: boolean;
+  completed_at?: string | null;
   task_order?: number;
 }
 
@@ -43,8 +63,12 @@ export interface SprintBacklogItem {
   sprint_id: number | null;
   title: string;
   details?: string | null;
+  context_notes?: string | null;
+  subtasks?: SprintSubtask[];
+  attachments?: SprintAttachment[];
   occurred_on?: string | null;
   due_date?: string | null;
+  completed_at?: string | null;
   created_by_user_id?: number;
   created_by_name?: string | null;
   status: 'planned' | 'in_progress' | 'done';
@@ -139,8 +163,16 @@ export interface NotificationItem {
   id: number;
   title: string;
   message?: string | null;
-  type: 'ticket_update' | 'sprint_update' | 'document' | 'report' | 'system';
+  type: 'ticket_update' | 'sprint_update' | 'document' | 'report' | 'system' | 'chat_message' | 'activity_update';
+  category: 'activities' | 'chat' | 'reports' | 'documents' | 'system';
+  event_type: string;
   is_read: 0 | 1;
+  read_at?: string | null;
+  occurred_at: string;
+  link_to?: string | null;
+  source_entity_type?: string | null;
+  source_entity_id?: number | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -151,13 +183,26 @@ export interface SuccessResponse {
 export interface ChatRoom {
   id: number;
   client_id: number;
-  room_type: 'general' | 'internal' | 'direct';
+  room_type: 'general' | 'internal' | 'direct' | 'group';
   name: string;
   created_at: string;
+  is_private?: boolean;
+  participants_count?: number;
   contact_user_id?: number | null;
   contact_name?: string | null;
   contact_role?: UserRole | null;
   unread_count?: number;
+}
+
+export interface ChatRoomParticipant {
+  room_id: number;
+  user_id: number;
+  added_by_user_id?: number | null;
+  is_admin: boolean;
+  last_read_at?: string | null;
+  joined_at: string;
+  user_name?: string;
+  user_role?: UserRole;
 }
 
 export interface ChatMessage {
@@ -191,7 +236,7 @@ export interface ProjectContact {
   created_at: string;
 }
 
-export type CalendarEventType = 'sprint_delivery' | 'meeting' | 'transcript' | 'general';
+export type CalendarEventType = 'sprint_delivery' | 'meeting' | 'transcript' | 'general' | 'task_due' | 'task_completed';
 
 export interface ProjectCalendarEvent {
   id: number;
