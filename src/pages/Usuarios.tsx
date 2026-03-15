@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { createUser, getClients, getUsers, sendPasswordReset, setUserActive, updateUserProfile } from '@/lib/queries';
-import { Plus, X, Loader2, CheckCircle2, AlertCircle, Pencil, KeyRound, UserX, UserCheck } from 'lucide-react';
+import { createUser, deleteUser, getClients, getUsers, sendPasswordReset, setUserActive, updateUserProfile } from '@/lib/queries';
+import { Plus, X, Loader2, CheckCircle2, AlertCircle, Pencil, KeyRound, UserX, UserCheck, Trash2 } from 'lucide-react';
 
 interface ClientRow {
   id: number;
@@ -173,6 +173,22 @@ export default function Usuarios() {
     }
   }
 
+  async function handleDeleteUser(target: UserRow) {
+    const ok = window.confirm(`Excluir o usuario "${target.name}"? Esta acao nao pode ser desfeita.`);
+    if (!ok) return;
+
+    setRunningActionId(target.id);
+    try {
+      await deleteUser(target.id);
+      setUsers((prev) => prev.filter((u) => u.id !== target.id));
+      showMsg('success', `Usuario "${target.name}" excluido com sucesso.`);
+    } catch (err: unknown) {
+      showMsg('error', err instanceof Error ? err.message : 'Erro ao excluir usuario.');
+    } finally {
+      setRunningActionId(null);
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 p-6">
       <div>
@@ -306,6 +322,15 @@ export default function Usuarios() {
                         >
                           {u.is_active ? <UserX size={12} /> : <UserCheck size={12} />}
                           {u.is_active ? 'Inativar' : 'Ativar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(u)}
+                          disabled={runningActionId === u.id}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 disabled:opacity-50"
+                        >
+                          {runningActionId === u.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          Excluir
                         </button>
                       </div>
                     </td>

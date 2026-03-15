@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { createClient, getClients, updateClient } from '@/lib/queries';
-import { Plus, X, Loader2, CheckCircle2, AlertCircle, Pencil } from 'lucide-react';
+import { createClient, deleteClient, getClients, updateClient } from '@/lib/queries';
+import { Plus, X, Loader2, CheckCircle2, AlertCircle, Pencil, Trash2 } from 'lucide-react';
 
 interface ClientRow {
   id: number;
@@ -74,6 +74,7 @@ export default function Adm() {
   const [clientForm, setClientForm] = useState(emptyClientForm);
   const [savingClient, setSavingClient] = useState(false);
   const [editingClientId, setEditingClientId] = useState<number | null>(null);
+  const [deletingClientId, setDeletingClientId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => {
@@ -161,6 +162,22 @@ export default function Adm() {
       showMsg('error', err instanceof Error ? err.message : 'Erro ao atualizar cliente.');
     } finally {
       setSavingClient(false);
+    }
+  }
+
+  async function handleDeleteClient(target: ClientRow) {
+    const ok = window.confirm(`Excluir o cliente "${target.company_name}"? Esta acao nao pode ser desfeita.`);
+    if (!ok) return;
+
+    setDeletingClientId(target.id);
+    try {
+      await deleteClient(target.id);
+      setClients((prev) => prev.filter((c) => c.id !== target.id));
+      showMsg('success', `Cliente "${target.company_name}" excluido com sucesso.`);
+    } catch (err: unknown) {
+      showMsg('error', err instanceof Error ? err.message : 'Erro ao excluir cliente.');
+    } finally {
+      setDeletingClientId(null);
     }
   }
 
@@ -271,14 +288,25 @@ export default function Adm() {
                   <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{c.contact_email ?? '—'}</td>
                   <td className="px-4 py-3">{statusBadge(c.status)}</td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(c)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
-                    >
-                      <Pencil size={13} />
-                      Editar
-                    </button>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(c)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                      >
+                        <Pencil size={13} />
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClient(c)}
+                        disabled={deletingClientId === c.id}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 disabled:opacity-60"
+                      >
+                        {deletingClientId === c.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                        Excluir
+                      </button>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-400 dark:text-slate-500 text-xs">{new Date(c.created_at).toLocaleDateString('pt-BR')}</td>
                 </tr>

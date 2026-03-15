@@ -72,6 +72,7 @@ export const portalService = {
     sprintId?: number | null;
     clientId?: number;
     title?: string;
+    details?: string;
     dueDate?: string;
   }) => queries.updateSprintBacklogItem(backlogId, payload),
   getBacklogActivities: (clientId: number) => queries.getBacklogActivities(clientId),

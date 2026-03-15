@@ -94,6 +94,16 @@ export async function setUserActive(userId: number, isActive: boolean) {
   return data;
 }
 
+export async function deleteUser(userId: number) {
+  const { error } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', userId);
+
+  if (error) throw error;
+  return true;
+}
+
 export async function sendPasswordReset(email: string) {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/login`,
@@ -222,6 +232,16 @@ export async function updateClient(clientId: number, updates: {
 
   if (error) throw error;
   return data;
+}
+
+export async function deleteClient(clientId: number) {
+  const { error } = await supabase
+    .from('clients')
+    .delete()
+    .eq('id', clientId);
+
+  if (error) throw error;
+  return true;
 }
 
 // ─── Project Updates ─────────────────────────────────────────────────
@@ -496,11 +516,14 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
   sprintId?: number | null;
   clientId?: number;
   title?: string;
+  details?: string;
   dueDate?: string;
 }) {
   const payload: Record<string, unknown> = {};
   if (updates.status) payload.status = updates.status;
   if (updates.sprintId !== undefined) payload.sprint_id = updates.sprintId;
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.details !== undefined) payload.details = updates.details;
 
   const { error } = await supabase
     .from('sprint_backlog')

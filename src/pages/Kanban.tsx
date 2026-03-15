@@ -3,9 +3,11 @@ import { usePortalScope } from '@/hooks/usePortalScope';
 import { portalService } from '@/lib/services/portal';
 import { SprintBacklogItem, Sprint } from '@/types/domain';
 import PageLoader from '@/components/PageLoader';
-import { CheckCircle2, Circle, GripVertical, Plus, UserCircle2 } from 'lucide-react';
+import { Archive, CheckCircle2, Circle, ClipboardList, GripVertical, Plus, UserCircle2 } from 'lucide-react';
 
 type KanbanColumn = 'backlog' | 'todo' | 'doing' | 'finished';
+type KanbanView = 'board' | 'registry';
+const ARCHIVED_TAG = '[ARQUIVADA]';
 
 const KANBAN_COLUMNS: Array<{ id: KanbanColumn; title: string }> = [
   { id: 'backlog', title: 'Backlog' },
@@ -18,8 +20,10 @@ export default function Kanban() {
   const { isInternal, activeClientId, activeClient, loadingClients } = usePortalScope();
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [backlog, setBacklog] = useState<SprintBacklogItem[]>([]);
+  const [backlogActivities, setBacklogActivities] = useState<any[]>([]);
   const [newBacklog, setNewBacklog] = useState({ title: '', details: '', dueDate: '' });
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  const [view, setView] = useState<KanbanView>('board');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,14 +36,28 @@ export default function Kanban() {
     Promise.all([
       portalService.getSprints(activeClientId),
       portalService.getSprintBacklog(activeClientId),
+      portalService.getBacklogActivities(activeClientId),
     ])
-      .then(([sprintsData, backlogData]) => {
+      .then(([sprintsData, backlogData, activitiesData]) => {
         setSprints(sprintsData as Sprint[]);
         setBacklog(backlogData as SprintBacklogItem[]);
+        setBacklogActivities((activitiesData || []) as any[]);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [activeClientId, isInternal, loadingClients]);
+
+  const isArchived = (item: SprintBacklogItem) => (item.details || '').includes(ARCHIVED_TAG);
+
+  const boardBacklog = useMemo(
+    () => backlog.filter((item) => !isArchived(item)),
+    [backlog]
+  );
+
+  const registryItems = useMemo(
+    () => backlog.filter((item) => item.status === 'done' || isArchived(item)),
+    [backlog]
+  );
 
   const defaultSprintId = useMemo(() => {
     const inProgress = sprints.find((s) => s.status === 'in_progress')?.id;
@@ -47,7 +65,7 @@ export default function Kanban() {
   }, [sprints]);
 
   const backlogColumns = useMemo(() => {
-    return backlog.reduce((acc: Record<KanbanColumn, SprintBacklogItem[]>, item) => {
+    return boardBacklog.reduce((acc: Record<KanbanColumn, SprintBacklogItem[]>, item) => {
       const column: KanbanColumn = item.status === 'done'
         ? 'finished'
         : item.status === 'in_progress'
@@ -58,7 +76,7 @@ export default function Kanban() {
       acc[column].push(item);
       return acc;
     }, { backlog: [], todo: [], doing: [], finished: [] });
-  }, [backlog]);
+  }, [boardBacklog]);
 
   const addBacklogItem = async () => {
     if (!activeClientId || !newBacklog.title.trim()) return;
@@ -118,13 +136,44 @@ export default function Kanban() {
         sprint_id: updates.sprintId === undefined ? item.sprint_id : updates.sprintId,
       };
     }));
+
+    if (targetColumn === 'finished') {
+      setView('registry');
+    }
+  };
+
+  const archiveBacklogItem = async (item: SprintBacklogItem) => {
+    if (!activeClientId) return;
+
+    const details = (item.details || '').includes(ARCHIVED_TAG)
+      ? item.details || ''
+      : `${ARCHIVED_TAG}\n${item.details || ''}`.trim();
+
+    await portalService.updateSprintBacklogItem(item.id, {
+      status: 'done',
+      sprintId: item.sprint_id || defaultSprintId,
+      clientId: activeClientId,
+      title: item.title,
+      dueDate: item.due_date || undefined,
+      details,
+    });
+
+    setBacklog((prev) => prev.map((row) => row.id === item.id ? { ...row, status: 'done', details } : row));
+    setView('registry');
   };
 
   const archiveCompleted = async () => {
     if (!activeClientId) return;
-    await portalService.archiveCompletedBacklogItems(activeClientId);
+    const completed = backlog.filter((item) => item.status === 'done' && !isArchived(item));
+    if (!completed.length) {
+      setView('registry');
+      return;
+    }
+
+    await Promise.all(completed.map((item) => archiveBacklogItem(item)));
     const data = await portalService.getSprintBacklog(activeClientId);
     setBacklog(data as SprintBacklogItem[]);
+    setView('registry');
   };
 
   if (loading || loadingClients) return <PageLoader />;
@@ -140,12 +189,98 @@ export default function Kanban() {
         <p className="text-gray-500 dark:text-slate-400 mt-1">Backlog operacional de {activeClient?.company_name || 'cliente'} sincronizado com Sprint.</p>
       </div>
 
+      <div className="flex items-center gap-2">
+        <button
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold ${
+            view === 'board'
+              ? 'bg-wayzen-600 text-white'
+              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+          }`}
+          onClick={() => setView('board')}
+        >
+          <ClipboardList size={15} />
+          Quadro Kanban
+        </button>
+        <button
+          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold ${
+            view === 'registry'
+              ? 'bg-wayzen-600 text-white'
+              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+          }`}
+          onClick={() => setView('registry')}
+        >
+          <Archive size={15} />
+          Registro ({registryItems.length})
+        </button>
+      </div>
+
+      {view === 'registry' ? (
+        <div className="space-y-4">
+          <div className="card p-4">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100">Demandas concluidas e arquivadas</h2>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Toda atividade concluida ou arquivada fica registrada aqui.</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300 uppercase text-xs">
+                <tr>
+                  <th className="px-4 py-3 text-left">Demanda</th>
+                  <th className="px-4 py-3 text-left">Tipo</th>
+                  <th className="px-4 py-3 text-left">Prazo</th>
+                  <th className="px-4 py-3 text-left">Criado em</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
+                {registryItems.map((item) => (
+                  <tr key={item.id}>
+                    <td className="px-4 py-3 text-slate-800 dark:text-slate-100 font-medium">{item.title}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        isArchived(item)
+                          ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      }`}>
+                        {isArchived(item) ? 'Arquivada' : 'Concluida'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{item.due_date ? new Date(item.due_date).toLocaleDateString('pt-BR') : 'Sem prazo'}</td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{new Date(item.created_at).toLocaleDateString('pt-BR')}</td>
+                  </tr>
+                ))}
+                {!registryItems.length && (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-slate-500 dark:text-slate-400" colSpan={4}>
+                      Nenhuma demanda registrada ainda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {!!backlogActivities.length && (
+            <div className="card p-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-2">Atividades vinculadas as sprints</h3>
+              <ul className="space-y-1.5 text-sm text-gray-600 dark:text-slate-300">
+                {backlogActivities.slice(0, 10).map((activity: any) => (
+                  <li key={activity.id}>
+                    {activity.title} {activity.is_completed ? '(concluida)' : '(em aberto)'}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+
       <div className="flex justify-end">
         <button
           className="btn-secondary"
           onClick={() => archiveCompleted().catch(console.error)}
         >
-          Arquivar atividades concluidas
+          Enviar concluidas para registro
         </button>
       </div>
 
@@ -220,20 +355,31 @@ export default function Kanban() {
                   </div>
 
                   <div className="mt-3 flex items-center justify-end">
-                    <button
-                      onClick={() => moveBacklogCard(item.id, item.status === 'done' ? 'doing' : 'finished').catch(console.error)}
-                      className={`w-7 h-7 rounded-md border inline-flex items-center justify-center transition-colors ${
-                        item.status === 'done'
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-500 dark:bg-emerald-900/30 dark:border-emerald-700/50'
-                          : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400'
-                      }`}
-                      aria-label={item.status === 'done' ? 'Marcar como pendente' : 'Marcar como concluida'}
-                      title={item.status === 'done' ? 'Desfazer conclusao' : 'Marcar como concluida'}
-                    >
-                      {item.status === 'done'
-                        ? <CheckCircle2 size={13} />
-                        : <Circle size={13} />}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {item.status === 'done' && !isArchived(item) && (
+                        <button
+                          onClick={() => archiveBacklogItem(item).catch(console.error)}
+                          className="px-2 py-1 text-xs rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
+                          title="Arquivar demanda"
+                        >
+                          Arquivar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => moveBacklogCard(item.id, item.status === 'done' ? 'doing' : 'finished').catch(console.error)}
+                        className={`w-7 h-7 rounded-md border inline-flex items-center justify-center transition-colors ${
+                          item.status === 'done'
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-500 dark:bg-emerald-900/30 dark:border-emerald-700/50'
+                            : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400'
+                        }`}
+                        aria-label={item.status === 'done' ? 'Marcar como pendente' : 'Marcar como concluida'}
+                        title={item.status === 'done' ? 'Desfazer conclusao' : 'Marcar como concluida'}
+                      >
+                        {item.status === 'done'
+                          ? <CheckCircle2 size={13} />
+                          : <Circle size={13} />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -247,6 +393,8 @@ export default function Kanban() {
           </div>
         ))}
       </div>
+      </>
+      )}
     </div>
   );
 }
