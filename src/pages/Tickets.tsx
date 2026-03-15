@@ -75,7 +75,16 @@ export default function Tickets() {
 
   const openDirectChat = async (contact: ContactUser) => {
     if (!activeClientId) return;
-    const room = await portalService.getOrCreateDirectChatRoom(activeClientId, contact.id);
+
+    const linkedUserId = contact.user_id ?? (contact.source !== 'project_contact' ? contact.id : null);
+    const room = linkedUserId
+      ? await portalService.getOrCreateDirectChatRoom(activeClientId, linkedUserId)
+      : await portalService.getOrCreateProjectContactRoom(
+          activeClientId,
+          contact.name,
+          contact.project_contact_id || Math.abs(contact.id)
+        );
+
     const refreshedRooms = await portalService.getChatRooms(activeClientId);
     setRooms(refreshedRooms);
     const selected = refreshedRooms.find((item) => item.id === room.id) || room;
@@ -139,7 +148,11 @@ export default function Tickets() {
                   <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{contact.name}</p>
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                     {contact.role === 'client' ? 'Cliente' : contact.role === 'admin' ? 'Admin' : 'Consultor'}
+                    {contact.source === 'project_contact' ? ' • Contato do projeto' : ''}
                   </p>
+                  {contact.email && (
+                    <p className="text-[11px] text-gray-400 dark:text-slate-500 mt-1">{contact.email}</p>
+                  )}
                 </button>
               ))}
               {!contacts.length && <p className="text-sm text-gray-400 dark:text-slate-500">Nenhum contato disponível.</p>}

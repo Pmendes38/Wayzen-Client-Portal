@@ -3,8 +3,8 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { usePortalScope } from '@/hooks/usePortalScope';
 import PageLoader from '@/components/PageLoader';
-import { Building2, CheckCircle2, Plus } from 'lucide-react';
-import { createClient } from '@/lib/queries';
+import { Building2, CheckCircle2, Plus, Trash2 } from 'lucide-react';
+import { createClient, deleteClient } from '@/lib/queries';
 import { useState } from 'react';
 
 export default function PortalSelect() {
@@ -12,6 +12,7 @@ export default function PortalSelect() {
   const { user } = useAuth();
   const { isInternal, clients, activeClientId, setActiveClientId, loadingClients, refreshClients } = usePortalScope();
   const [creating, setCreating] = useState(false);
+  const [deletingClientId, setDeletingClientId] = useState<number | null>(null);
   const [newProject, setNewProject] = useState({ companyName: '', tradeName: '', contactName: '', contactEmail: '' });
 
   const selectedClient = useMemo(
@@ -45,6 +46,24 @@ export default function PortalSelect() {
       setNewProject({ companyName: '', tradeName: '', contactName: '', contactEmail: '' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleDeleteProject = async (clientId: number, companyName: string) => {
+    const ok = window.confirm(`Apagar o projeto/cliente "${companyName}"? Esta acao nao pode ser desfeita.`);
+    if (!ok) return;
+
+    setDeletingClientId(clientId);
+    try {
+      await deleteClient(clientId);
+      if (activeClientId === clientId) {
+        setActiveClientId(null);
+      }
+      await refreshClients?.();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setDeletingClientId(null);
     }
   };
 
@@ -90,6 +109,21 @@ export default function PortalSelect() {
                       {selected ? <CheckCircle2 size={20} /> : <Building2 size={20} />}
                     </div>
                   </div>
+                  {user.role === 'admin' && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteProject(client.id, client.company_name).catch(console.error);
+                        }}
+                        disabled={deletingClientId === client.id}
+                        className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 disabled:opacity-60"
+                      >
+                        {deletingClientId === client.id ? 'Apagando...' : <><Trash2 size={12} /> Apagar projeto</>}
+                      </button>
+                    </div>
+                  )}
                 </button>
               );
             })}

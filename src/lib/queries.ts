@@ -8,7 +8,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 export async function getUsers() {
   const { data, error } = await supabase
     .from('users')
-    .select('id, auth_user_id, email, name, role, client_id, is_active, created_at')
+    .select('id, auth_user_id, email, name, role, client_id, phone, avatar_url, is_active, created_at')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -20,6 +20,8 @@ export async function createUser(userData: {
   email: string;
   password: string;
   role: 'admin' | 'consultant' | 'client';
+  phone?: string;
+  avatarUrl?: string;
   clientId?: number | null;
 }) {
   if (userData.role === 'client' && !userData.clientId) {
@@ -34,6 +36,12 @@ export async function createUser(userData: {
   const { data: authData, error: authError } = await tempClient.auth.signUp({
     email: userData.email,
     password: userData.password,
+    options: {
+      data: {
+        name: userData.name,
+        phone: userData.phone || null,
+      },
+    },
   });
 
   if (authError) throw authError;
@@ -48,6 +56,8 @@ export async function createUser(userData: {
       email: userData.email,
       name: userData.name,
       role: userData.role,
+      phone: userData.phone || null,
+      avatar_url: userData.avatarUrl || null,
       client_id: userData.clientId ?? null,
       is_active: true,
     })
@@ -61,6 +71,8 @@ export async function createUser(userData: {
 export async function updateUserProfile(userId: number, updates: {
   name: string;
   role: 'admin' | 'consultant' | 'client';
+  phone?: string;
+  avatarUrl?: string;
   clientId?: number | null;
 }) {
   if (updates.role === 'client' && !updates.clientId) {
@@ -72,10 +84,12 @@ export async function updateUserProfile(userId: number, updates: {
     .update({
       name: updates.name,
       role: updates.role,
+      phone: updates.phone || null,
+      avatar_url: updates.avatarUrl || null,
       client_id: updates.role === 'client' ? updates.clientId ?? null : null,
     })
     .eq('id', userId)
-    .select('id, auth_user_id, email, name, role, client_id, is_active, created_at')
+    .select('id, auth_user_id, email, name, role, client_id, phone, avatar_url, is_active, created_at')
     .single();
 
   if (error) throw error;
@@ -87,7 +101,7 @@ export async function setUserActive(userId: number, isActive: boolean) {
     .from('users')
     .update({ is_active: isActive })
     .eq('id', userId)
-    .select('id, auth_user_id, email, name, role, client_id, is_active, created_at')
+    .select('id, auth_user_id, email, name, role, client_id, phone, avatar_url, is_active, created_at')
     .single();
 
   if (error) throw error;
@@ -771,6 +785,15 @@ export async function getChatRooms(clientId: number) {
   return rooms
     .map((room: any) => {
       if (room.room_type !== 'direct') return room;
+      if (!room.direct_user_a_id && !room.direct_user_b_id && String(room.name || '').startsWith('[Contato #')) {
+        const parsedName = String(room.name).replace(/^\[Contato #\d+\]\s*/, '').trim();
+        return {
+          ...room,
+          contact_user_id: null,
+          contact_name: parsedName || room.name,
+          contact_role: 'client',
+        };
+      }
       const otherId = room.direct_user_a_id === user.id ? room.direct_user_b_id : room.direct_user_a_id;
       const person = peopleById[otherId];
       return {
@@ -789,20 +812,70 @@ export async function getChatContacts(clientId: number) {
 
   const query = supabase
     .from('users')
-    .select('id, name, role')
+    .select('id, name, role, email')
     .eq('is_active', true)
     .neq('id', user.id)
     .order('name', { ascending: true });
 
+  let userContacts: any[] = [];
   if (user.role === 'client') {
     const { data, error } = await query.in('role', ['admin', 'consultant']);
     if (error) throw error;
-    return data || [];
+    userContacts = data || [];
+  } else {
+    const { data, error } = await query.eq('role', 'client').eq('client_id', clientId);
+    if (error) throw error;
+    userContacts = data || [];
   }
 
-  const { data, error } = await query.eq('role', 'client').eq('client_id', clientId);
-  if (error) throw error;
-  return data || [];
+  const { data: projectContactsData, error: projectContactsError } = await supabase
+    .from('project_contacts')
+    .select('id, name, email, role')
+    .eq('client_id', clientId)
+    .order('name', { ascending: true });
+
+  if (projectContactsError) throw projectContactsError;
+
+  const usersByEmail = (userContacts || []).reduce((acc: Record<string, any>, contact: any) => {
+    if (contact.email) {
+      acc[String(contact.email).toLowerCase()] = contact;
+    }
+    return acc;
+  }, {});
+
+  const projectContacts = (projectContactsData || []).map((contact: any) => {
+    const linkedUser = contact.email ? usersByEmail[String(contact.email).toLowerCase()] : null;
+    return {
+      id: -(contact.id as number),
+      name: contact.name,
+      role: linkedUser?.role || 'client',
+      email: contact.email,
+      source: 'project_contact',
+      user_id: linkedUser?.id || null,
+      project_contact_id: contact.id,
+    };
+  });
+
+  const normalizedUsers = (userContacts || []).map((contact: any) => ({
+    ...contact,
+    source: 'user',
+    user_id: contact.id,
+    project_contact_id: null,
+  }));
+
+  const merged = [...normalizedUsers, ...projectContacts];
+
+  // Evita duplicidade visual por e-mail quando um contato de projeto ja possui usuário no portal.
+  const deduped: any[] = [];
+  const seen = new Set<string>();
+  for (const contact of merged) {
+    const key = contact.email ? `email:${String(contact.email).toLowerCase()}` : `${contact.source}:${contact.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(contact);
+  }
+
+  return deduped;
 }
 
 export async function getOrCreateDirectChatRoom(clientId: number, contactUserId: number) {
@@ -836,6 +909,38 @@ export async function getOrCreateDirectChatRoom(clientId: number, contactUserId:
       name: 'Chat Direto',
       direct_user_a_id: userA,
       direct_user_b_id: userB,
+      created_by_user_id: user.id,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getOrCreateProjectContactRoom(clientId: number, contactName: string, projectContactId: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Usuário não autenticado');
+
+  const roomName = `[Contato #${projectContactId}] ${contactName}`;
+
+  const existing = await supabase
+    .from('chat_rooms')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('room_type', 'direct')
+    .eq('name', roomName)
+    .maybeSingle();
+
+  if (existing.error) throw existing.error;
+  if (existing.data) return existing.data;
+
+  const { data, error } = await supabase
+    .from('chat_rooms')
+    .insert({
+      client_id: clientId,
+      room_type: 'direct',
+      name: roomName,
       created_by_user_id: user.id,
     })
     .select('*')

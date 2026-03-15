@@ -14,6 +14,8 @@ interface UserRow {
   name: string;
   email: string;
   role: string;
+  phone?: string | null;
+  avatar_url?: string | null;
   client_id?: number | null;
   is_active: boolean;
   created_at: string;
@@ -23,6 +25,8 @@ const emptyUserForm = {
   name: '',
   email: '',
   password: '',
+  phone: '',
+  avatarUrl: '',
   role: 'client' as 'admin' | 'consultant' | 'client',
   clientId: '' as string,
 };
@@ -95,6 +99,8 @@ export default function Usuarios() {
         email: userForm.email,
         password: userForm.password,
         role: userForm.role,
+        phone: userForm.phone || undefined,
+        avatarUrl: userForm.avatarUrl || undefined,
         clientId: userForm.role === 'client' && userForm.clientId ? Number(userForm.clientId) : null,
       }) as UserRow;
 
@@ -116,6 +122,8 @@ export default function Usuarios() {
       name: userRow.name,
       email: userRow.email,
       password: '',
+      phone: userRow.phone || '',
+      avatarUrl: userRow.avatar_url || '',
       role: userRow.role as 'admin' | 'consultant' | 'client',
       clientId: userRow.client_id ? String(userRow.client_id) : '',
     });
@@ -133,6 +141,8 @@ export default function Usuarios() {
       const updated = await updateUserProfile(editingUserId, {
         name: userForm.name,
         role: userForm.role,
+        phone: userForm.phone || undefined,
+        avatarUrl: userForm.avatarUrl || undefined,
         clientId: userForm.role === 'client' && userForm.clientId ? Number(userForm.clientId) : null,
       }) as UserRow;
 
@@ -239,6 +249,12 @@ export default function Usuarios() {
                 <option value="admin">Admin</option>
               </select>
             </Field>
+            <Field label="Telefone">
+              <input className={inputCls} value={userForm.phone} onChange={(e) => setUserForm({ ...userForm, phone: e.target.value })} placeholder="(11) 99999-9999" />
+            </Field>
+            <Field label="URL da Foto (avatar)">
+              <input className={inputCls} value={userForm.avatarUrl} onChange={(e) => setUserForm({ ...userForm, avatarUrl: e.target.value })} placeholder="https://..." />
+            </Field>
             {userForm.role === 'client' && (
               <Field label="Cliente vinculado" required>
                 <select className={inputCls} value={userForm.clientId} onChange={(e) => setUserForm({ ...userForm, clientId: e.target.value })} required>
@@ -269,6 +285,7 @@ export default function Usuarios() {
               <tr>
                 <th className="px-4 py-3 text-left">Nome</th>
                 <th className="px-4 py-3 text-left">E-mail</th>
+                <th className="px-4 py-3 text-left">Telefone</th>
                 <th className="px-4 py-3 text-left">Papel</th>
                 <th className="px-4 py-3 text-left">Cliente</th>
                 <th className="px-4 py-3 text-left">Status</th>
@@ -283,6 +300,7 @@ export default function Usuarios() {
                   <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-slate-900/50 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900 dark:text-slate-100">{u.name}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{u.email}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{u.phone || '—'}</td>
                     <td className="px-4 py-3">{roleBadge(u.role)}</td>
                     <td className="px-4 py-3 text-gray-600 dark:text-slate-300">{linkedClient ? linkedClient.company_name : '—'}</td>
                     <td className="px-4 py-3">

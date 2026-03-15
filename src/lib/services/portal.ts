@@ -98,6 +98,8 @@ export const portalService = {
   getChatContacts: (clientId: number) => queries.getChatContacts(clientId),
   getOrCreateDirectChatRoom: (clientId: number, contactUserId: number) =>
     queries.getOrCreateDirectChatRoom(clientId, contactUserId),
+  getOrCreateProjectContactRoom: (clientId: number, contactName: string, projectContactId: number) =>
+    queries.getOrCreateProjectContactRoom(clientId, contactName, projectContactId),
   getChatMessages: (roomId: number) => queries.getChatMessages(roomId),
   createChatMessage: (roomId: number, message: string) => queries.createChatMessage(roomId, message),
 

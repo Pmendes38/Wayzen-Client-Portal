@@ -174,6 +174,10 @@ export interface ContactUser {
   id: number;
   name: string;
   role: UserRole;
+  email?: string | null;
+  source?: 'user' | 'project_contact';
+  user_id?: number | null;
+  project_contact_id?: number | null;
 }
 
 export interface ProjectContact {
