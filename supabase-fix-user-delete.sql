@@ -21,26 +21,20 @@ alter table public.sprint_backlog
 alter table public.sprint_backlog
   drop constraint if exists sprint_backlog_created_by_user_id_fkey;
 
-alter table public.sprint_backlog
-  add constraint sprint_backlog_created_by_user_id_fkey
-  foreign key (created_by_user_id)
-  references public.users(id)
-  on delete set null;
+do $$ begin
+  alter table public.sprint_backlog
+    add constraint sprint_backlog_created_by_user_id_fkey
+    foreign key (created_by_user_id)
+    references public.users(id)
+    on delete set null;
+exception when duplicate_object then null;
+end $$;
 
 -- =====================================================
--- 2. DAILY_LOGS: consultant_user_id → SET NULL
+-- 2. DAILY_LOGS — SEM AÇÃO NECESSÁRIA
+--    A tabela daily_logs usa user_id uuid references auth.users(id)
+--    com ON DELETE CASCADE. Não tem coluna consultant_user_id.
 -- =====================================================
-alter table public.daily_logs
-  alter column consultant_user_id drop not null;
-
-alter table public.daily_logs
-  drop constraint if exists daily_logs_consultant_user_id_fkey;
-
-alter table public.daily_logs
-  add constraint daily_logs_consultant_user_id_fkey
-  foreign key (consultant_user_id)
-  references public.users(id)
-  on delete set null;
 
 -- =====================================================
 -- 3. MEETING_EVENTS: created_by_user_id → SET NULL
@@ -51,11 +45,14 @@ alter table public.meeting_events
 alter table public.meeting_events
   drop constraint if exists meeting_events_created_by_user_id_fkey;
 
-alter table public.meeting_events
-  add constraint meeting_events_created_by_user_id_fkey
-  foreign key (created_by_user_id)
-  references public.users(id)
-  on delete set null;
+do $$ begin
+  alter table public.meeting_events
+    add constraint meeting_events_created_by_user_id_fkey
+    foreign key (created_by_user_id)
+    references public.users(id)
+    on delete set null;
+exception when duplicate_object then null;
+end $$;
 
 -- =====================================================
 -- 4. CHAT_ROOMS: created_by_user_id → SET NULL
@@ -66,11 +63,14 @@ alter table public.chat_rooms
 alter table public.chat_rooms
   drop constraint if exists chat_rooms_created_by_user_id_fkey;
 
-alter table public.chat_rooms
-  add constraint chat_rooms_created_by_user_id_fkey
-  foreign key (created_by_user_id)
-  references public.users(id)
-  on delete set null;
+do $$ begin
+  alter table public.chat_rooms
+    add constraint chat_rooms_created_by_user_id_fkey
+    foreign key (created_by_user_id)
+    references public.users(id)
+    on delete set null;
+exception when duplicate_object then null;
+end $$;
 
 -- =====================================================
 -- 5. RPC: delete_portal_user
@@ -113,7 +113,7 @@ begin
   -- Finalmente deleta o registro do usuário.
   -- FKs restantes:
   --   sprint_backlog.created_by_user_id   → SET NULL (passo 1)
-  --   daily_logs.consultant_user_id       → SET NULL (passo 2)
+  --   daily_logs.user_id                  → CASCADE (auth.users, sem ação)
   --   meeting_events.created_by_user_id   → SET NULL (passo 3)
   --   chat_rooms.created_by_user_id       → SET NULL (passo 4)
   --   chat_room_participants.user_id      → CASCADE (já existia)
