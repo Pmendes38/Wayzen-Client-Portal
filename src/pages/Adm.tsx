@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { createClient, getClients } from '@/lib/queries';
-import { Plus, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { createClient, getClients, updateClient } from '@/lib/queries';
+import { Plus, X, Loader2, CheckCircle2, AlertCircle, Pencil } from 'lucide-react';
 
 interface ClientRow {
   id: number;
   company_name: string;
   trade_name?: string | null;
+  cnpj?: string | null;
+  segment?: string | null;
   contact_name: string;
   contact_email?: string | null;
+  contact_phone?: string | null;
   status: string;
+  monthly_fee?: number | null;
+  contract_start?: string | null;
+  contract_end?: string | null;
   created_at: string;
 }
 
@@ -67,6 +73,7 @@ export default function Adm() {
   const [showClientForm, setShowClientForm] = useState(false);
   const [clientForm, setClientForm] = useState(emptyClientForm);
   const [savingClient, setSavingClient] = useState(false);
+  const [editingClientId, setEditingClientId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   useEffect(() => {
@@ -108,6 +115,55 @@ export default function Adm() {
     }
   }
 
+  function startEdit(client: ClientRow) {
+    setEditingClientId(client.id);
+    setShowClientForm(true);
+    setClientForm({
+      companyName: client.company_name ?? '',
+      tradeName: client.trade_name ?? '',
+      cnpj: client.cnpj ?? '',
+      segment: client.segment ?? '',
+      contactName: client.contact_name ?? '',
+      contactEmail: client.contact_email ?? '',
+      contactPhone: client.contact_phone ?? '',
+      monthlyFee: String(client.monthly_fee ?? 0),
+      contractStart: client.contract_start ?? '',
+    });
+  }
+
+  async function handleSaveClient(e: React.FormEvent) {
+    e.preventDefault();
+    if (editingClientId === null) {
+      await handleCreateClient(e);
+      return;
+    }
+
+    setSavingClient(true);
+    try {
+      const updated = await updateClient(editingClientId, {
+        companyName: clientForm.companyName,
+        tradeName: clientForm.tradeName || undefined,
+        cnpj: clientForm.cnpj || undefined,
+        segment: clientForm.segment || undefined,
+        contactName: clientForm.contactName,
+        contactEmail: clientForm.contactEmail,
+        contactPhone: clientForm.contactPhone || undefined,
+        monthlyFee: clientForm.monthlyFee ? Number(clientForm.monthlyFee) : 0,
+        contractStart: clientForm.contractStart || undefined,
+      }) as ClientRow;
+
+      setClients((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setShowClientForm(false);
+      setEditingClientId(null);
+      setClientForm(emptyClientForm);
+      showMsg('success', `Cliente "${updated.company_name}" atualizado com sucesso!`);
+    } catch (err: unknown) {
+      showMsg('error', err instanceof Error ? err.message : 'Erro ao atualizar cliente.');
+    } finally {
+      setSavingClient(false);
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 p-6">
       <div>
@@ -132,7 +188,11 @@ export default function Adm() {
           {loadingClients ? 'Carregando...' : `${clients.length} cliente(s) cadastrado(s)`}
         </p>
         <button
-          onClick={() => setShowClientForm((v) => !v)}
+          onClick={() => {
+            setEditingClientId(null);
+            setClientForm(emptyClientForm);
+            setShowClientForm((v) => !v);
+          }}
           className="flex items-center gap-1.5 px-3 py-2 bg-wayzen-600 hover:bg-wayzen-700 text-white text-sm font-semibold rounded-lg transition-colors"
         >
           {showClientForm ? <X size={15} /> : <Plus size={15} />}
@@ -142,7 +202,7 @@ export default function Adm() {
 
       {showClientForm && (
         <form
-          onSubmit={handleCreateClient}
+          onSubmit={handleSaveClient}
           className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 space-y-4"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -175,12 +235,12 @@ export default function Adm() {
             </Field>
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={() => { setShowClientForm(false); setClientForm(emptyClientForm); }} className="px-4 py-2 text-sm text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+            <button type="button" onClick={() => { setShowClientForm(false); setEditingClientId(null); setClientForm(emptyClientForm); }} className="px-4 py-2 text-sm text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
               Cancelar
             </button>
             <button type="submit" disabled={savingClient} className="flex items-center gap-2 px-4 py-2 bg-wayzen-600 hover:bg-wayzen-700 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors">
               {savingClient && <Loader2 size={14} className="animate-spin" />}
-              Cadastrar Cliente
+              {editingClientId ? 'Salvar Alteracoes' : 'Cadastrar Cliente'}
             </button>
           </div>
         </form>
@@ -199,6 +259,7 @@ export default function Adm() {
                 <th className="px-4 py-3 text-left">Responsavel</th>
                 <th className="px-4 py-3 text-left">E-mail</th>
                 <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Acoes</th>
                 <th className="px-4 py-3 text-left">Cadastro</th>
               </tr>
             </thead>
@@ -209,6 +270,16 @@ export default function Adm() {
                   <td className="px-4 py-3 text-gray-600 dark:text-slate-300">{c.contact_name}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{c.contact_email ?? '—'}</td>
                   <td className="px-4 py-3">{statusBadge(c.status)}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(c)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200"
+                    >
+                      <Pencil size={13} />
+                      Editar
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-gray-400 dark:text-slate-500 text-xs">{new Date(c.created_at).toLocaleDateString('pt-BR')}</td>
                 </tr>
               ))}

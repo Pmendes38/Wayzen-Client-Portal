@@ -22,6 +22,10 @@ export async function createUser(userData: {
   role: 'admin' | 'consultant' | 'client';
   clientId?: number | null;
 }) {
+  if (userData.role === 'client' && !userData.clientId) {
+    throw new Error('Usuario cliente precisa estar vinculado a um cliente.');
+  }
+
   // Use an isolated client so the admin session on the main client is not replaced
   const tempClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -52,6 +56,51 @@ export async function createUser(userData: {
 
   if (error) throw error;
   return data;
+}
+
+export async function updateUserProfile(userId: number, updates: {
+  name: string;
+  role: 'admin' | 'consultant' | 'client';
+  clientId?: number | null;
+}) {
+  if (updates.role === 'client' && !updates.clientId) {
+    throw new Error('Usuario cliente precisa estar vinculado a um cliente.');
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .update({
+      name: updates.name,
+      role: updates.role,
+      client_id: updates.role === 'client' ? updates.clientId ?? null : null,
+    })
+    .eq('id', userId)
+    .select('id, auth_user_id, email, name, role, client_id, is_active, created_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function setUserActive(userId: number, isActive: boolean) {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ is_active: isActive })
+    .eq('id', userId)
+    .select('id, auth_user_id, email, name, role, client_id, is_active, created_at')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function sendPasswordReset(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/login`,
+  });
+
+  if (error) throw error;
+  return true;
 }
 
 // ─── Helper Functions ────────────────────────────────────────────────
@@ -133,6 +182,42 @@ export async function createClient(clientData: {
       contract_end: clientData.contractEnd,
     })
     .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateClient(clientId: number, updates: {
+  companyName: string;
+  tradeName?: string;
+  cnpj?: string;
+  segment?: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone?: string;
+  status?: 'active' | 'paused' | 'churned';
+  monthlyFee?: number;
+  contractStart?: string;
+  contractEnd?: string;
+}) {
+  const { data, error } = await supabase
+    .from('clients')
+    .update({
+      company_name: updates.companyName,
+      trade_name: updates.tradeName,
+      cnpj: updates.cnpj,
+      segment: updates.segment,
+      contact_name: updates.contactName,
+      contact_email: updates.contactEmail,
+      contact_phone: updates.contactPhone,
+      status: updates.status ?? 'active',
+      monthly_fee: updates.monthlyFee ?? 0,
+      contract_start: updates.contractStart,
+      contract_end: updates.contractEnd,
+    })
+    .eq('id', clientId)
+    .select('*')
     .single();
 
   if (error) throw error;
