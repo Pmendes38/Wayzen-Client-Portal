@@ -331,9 +331,7 @@ export async function setUserActive(userId: number, isActive: boolean) {
 
 export async function deleteUser(userId: number) {
   const { error } = await supabase
-    .from('users')
-    .delete()
-    .eq('id', userId);
+    .rpc('delete_portal_user', { p_user_id: userId });
 
   if (error) throw error;
   return true;
