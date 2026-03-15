@@ -969,6 +969,8 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
     .from('sprint_tasks')
     .select('id, sprint_id')
     .eq('backlog_item_id', backlogId)
+    .order('id', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (existingTask.error) throw existingTask.error;
