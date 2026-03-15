@@ -3,6 +3,16 @@ import { supabase } from './supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const ADMIN_CREATE_USER_STORAGE_KEY = 'wayzen.admin.create-user.auth';
+
+const adminCreateUserClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+    storageKey: ADMIN_CREATE_USER_STORAGE_KEY,
+  },
+});
 
 // ─── Users (Admin) ────────────────────────────────────────────────────
 export async function getUsers() {
@@ -28,13 +38,22 @@ export async function createUser(userData: {
     throw new Error('Usuario cliente precisa estar vinculado a um cliente.');
   }
 
-  // Use an isolated client so the admin session on the main client is not replaced
-  const tempClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const normalizedEmail = userData.email.trim().toLowerCase();
 
-  const { data: authData, error: authError } = await tempClient.auth.signUp({
-    email: userData.email,
+  const existing = await supabase
+    .from('users')
+    .select('id')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (existing.error) throw existing.error;
+  if (existing.data) {
+    throw new Error('Ja existe um usuario com este e-mail no portal.');
+  }
+
+  // Use an isolated client so the admin session on the main client is not replaced
+  const { data: authData, error: authError } = await adminCreateUserClient.auth.signUp({
+    email: normalizedEmail,
     password: userData.password,
     options: {
       data: {
@@ -44,7 +63,15 @@ export async function createUser(userData: {
     },
   });
 
-  if (authError) throw authError;
+  if (authError) {
+    const message = authError.message || '';
+    if (/email rate limit exceeded/i.test(message)) {
+      throw new Error(
+        'Limite de e-mails do Supabase atingido. Aguarde alguns segundos e tente novamente. Para cadastros em lote, desative temporariamente a confirmacao de e-mail no painel do Supabase.'
+      );
+    }
+    throw authError;
+  }
 
   const authUserId = authData.user?.id;
   if (!authUserId) throw new Error('Falha ao criar conta de autenticação');
@@ -53,7 +80,7 @@ export async function createUser(userData: {
     .from('users')
     .insert({
       auth_user_id: authUserId,
-      email: userData.email,
+      email: normalizedEmail,
       name: userData.name,
       role: userData.role,
       phone: userData.phone || null,
