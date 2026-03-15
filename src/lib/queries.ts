@@ -986,6 +986,8 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
   attachments?: JsonAttachment[];
   dueDate?: string;
 }) {
+  // Build payload WITHOUT completed_at — it's handled by DB trigger after Phase 1 migration.
+  // Keeping it out avoids silent failures when the column doesn't exist yet.
   const payload: Record<string, unknown> = {};
   if (updates.status) payload.status = updates.status;
   if (updates.sprintId !== undefined) payload.sprint_id = updates.sprintId;
@@ -994,8 +996,6 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
   if (updates.contextNotes !== undefined) payload.context_notes = updates.contextNotes;
   if (updates.subtasks !== undefined) payload.subtasks = updates.subtasks;
   if (updates.attachments !== undefined) payload.attachments = updates.attachments;
-  if (updates.status === 'done') payload.completed_at = new Date().toISOString();
-  if (updates.status && updates.status !== 'done') payload.completed_at = null;
   if (updates.dueDate !== undefined) payload.due_date = updates.dueDate;
 
   const existingTask = await supabase
@@ -1008,38 +1008,34 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
 
   if (existingTask.error) throw existingTask.error;
 
-  let { error } = await supabase
+  // Use .select() so we can detect when 0 rows were affected (e.g. RLS silent block).
+  const { data: updatedRows, error } = await supabase
     .from('sprint_backlog')
     .update(payload)
-    .eq('id', backlogId);
-
-  if (error && Object.prototype.hasOwnProperty.call(payload, 'completed_at') && isMissingColumnError(error, 'completed_at')) {
-    const { completed_at, ...fallbackPayload } = payload;
-    const retry = await supabase
-      .from('sprint_backlog')
-      .update(fallbackPayload)
-      .eq('id', backlogId);
-    error = retry.error;
-  }
+    .eq('id', backlogId)
+    .select('id, status, sprint_id, client_id, title, due_date, details');
 
   if (error) throw error;
 
-  const refreshedBacklog = await supabase
-    .from('sprint_backlog')
-    .select('*')
-    .eq('id', backlogId)
-    .maybeSingle();
+  if (!updatedRows || updatedRows.length === 0) {
+    throw new Error('Nenhuma linha atualizada — verifique permissões ou se o registro existe');
+  }
 
-  if (refreshedBacklog.error) throw refreshedBacklog.error;
+  const data = updatedRows[0] as Record<string, unknown>;
 
-  const data = refreshedBacklog.data ?? {
-    id: backlogId,
-    client_id: updates.clientId ?? null,
-    sprint_id: updates.sprintId ?? existingTask.data?.sprint_id ?? null,
-    title: updates.title ?? null,
-    status: updates.status ?? null,
-  };
+  // Best-effort: set completed_at if the column exists (Phase 1 migration applied).
+  if (updates.status !== undefined) {
+    const completedPayload = {
+      completed_at: updates.status === 'done' ? new Date().toISOString() : null,
+    };
+    void supabase
+      .from('sprint_backlog')
+      .update(completedPayload)
+      .eq('id', backlogId)
+      .then(({ error: e }) => { if (e && !isMissingColumnError(e, 'completed_at')) console.error(e); });
+  }
 
+  // Best-effort: sync linked sprint task.
   if (existingTask.data) {
     const taskPayload: Record<string, unknown> = {};
     if (updates.title !== undefined) taskPayload.title = updates.title;
@@ -1050,27 +1046,13 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
     if (updates.dueDate !== undefined) taskPayload.due_date = updates.dueDate;
     if (updates.status !== undefined) {
       taskPayload.is_completed = updates.status === 'done';
-      taskPayload.completed_at = updates.status === 'done' ? new Date().toISOString() : null;
     }
     if (Object.keys(taskPayload).length) {
-      let { error: syncError } = await supabase
+      void supabase
         .from('sprint_tasks')
         .update(taskPayload)
-        .eq('id', existingTask.data.id);
-
-      if (syncError && Object.prototype.hasOwnProperty.call(taskPayload, 'completed_at') && isMissingColumnError(syncError, 'completed_at')) {
-        const { completed_at, ...fallbackTaskPayload } = taskPayload;
-        const retry = await supabase
-          .from('sprint_tasks')
-          .update(fallbackTaskPayload)
-          .eq('id', existingTask.data.id);
-        syncError = retry.error;
-      }
-
-      if (syncError) {
-        // Kanban should continue even if legacy linked task sync fails.
-        console.error(syncError);
-      }
+        .eq('id', existingTask.data.id)
+        .then(({ error: e }) => { if (e) console.error(e); });
     }
   }
 
@@ -1080,7 +1062,7 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
       backlogId,
       updates.title,
       updates.dueDate,
-      data.sprint_id ?? null,
+      (data.sprint_id as number | null) ?? null,
     ).catch(console.error);
   }
 
@@ -1088,14 +1070,14 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
     upsertTaskCompletionCalendarEvent(
       updates.clientId,
       existingTask.data?.id || backlogId,
-      updates.title || data.title,
+      (updates.title || data.title) as string,
       new Date().toISOString(),
-      data.sprint_id ?? null,
+      (data.sprint_id as number | null) ?? null,
     ).catch(console.error);
   }
 
   if (typeof data.client_id === 'number') {
-    await notifyClientUsers(data.client_id, {
+    notifyClientUsers(data.client_id, {
       type: 'activity_update',
       category: 'activities',
       eventType: updates.status === 'done' ? 'backlog.item.completed' : 'backlog.item.updated',
