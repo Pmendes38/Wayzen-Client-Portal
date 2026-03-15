@@ -135,6 +135,7 @@ export default function Sprints() {
       showSyncNotice('Atualizado no Kanban');
     } catch (error) {
       console.error(error);
+      showSyncNotice(`Erro: ${error instanceof Error ? error.message : 'Falha ao concluir atividade'}`);
     } finally {
       setSyncState('idle');
     }
@@ -224,6 +225,9 @@ export default function Sprints() {
       setExpanded((prev) => ({ ...prev, [taskEditorState.sprintId]: true }));
       setTaskEditorState(null);
       showSyncNotice('Atualizado no Kanban');
+    } catch (err) {
+      console.error(err);
+      showSyncNotice(`Erro: ${err instanceof Error ? err.message : 'Falha ao salvar atividade'}`);
     } finally {
       setSyncState('idle');
     }
@@ -249,9 +253,13 @@ export default function Sprints() {
       </div>
 
       {syncNotice && (
-        <div className="mb-4 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
+        <div className={`mb-4 flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-medium ${
+          syncNotice.startsWith('Erro:')
+            ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300'
+            : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300'
+        }`}>
           <span>{syncNotice}</span>
-          <button type="button" onClick={() => setSyncNotice(null)} className="rounded-md p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/20">
+          <button type="button" onClick={() => setSyncNotice(null)} className="rounded-md p-1 hover:bg-black/5 dark:hover:bg-white/5">
             <X size={14} />
           </button>
         </div>

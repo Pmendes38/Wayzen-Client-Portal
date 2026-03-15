@@ -70,8 +70,10 @@ function resolveSprintLabel(event: ProjectCalendarEvent): string | null {
     return event.title ?? null;
   }
 
-  // task_due / task_completed: no sprint context is stored by the backend
+  // task_due / task_completed: sprint name is stored in description as \nSprint: "{name}"
   if (event.type === 'task_due' || event.type === 'task_completed') {
+    const sprintMatch = event.description?.match(/\nSprint:\s*"([^"]+)"/);
+    if (sprintMatch?.[1]) return sprintMatch[1];
     return null;
   }
 

@@ -573,7 +573,17 @@ async function upsertBacklogCalendarEvent(
   itemId: number,
   title: string,
   dueDate: string,
+  sprintId?: number | null,
 ): Promise<void> {
+  let sprintName: string | undefined;
+  if (sprintId) {
+    const { data: sprint } = await supabase
+      .from('sprints')
+      .select('name')
+      .eq('id', sprintId)
+      .maybeSingle();
+    sprintName = sprint?.name ?? undefined;
+  }
   await supabase
     .from('project_calendar_events')
     .upsert(
@@ -584,7 +594,9 @@ async function upsertBacklogCalendarEvent(
         start_at: `${dueDate}T09:00:00Z`,
         end_at: `${dueDate}T09:00:00Z`,
         type: 'task_due',
-        description: `Atividade: ${title}`,
+        description: sprintName
+          ? `Atividade: ${title}\nSprint: "${sprintName}"`
+          : `Atividade: ${title}`,
         participant_ids: [],
       },
       { onConflict: 'id' },
@@ -596,7 +608,17 @@ async function upsertTaskCompletionCalendarEvent(
   taskId: number,
   title: string,
   completedAt: string,
+  sprintId?: number | null,
 ): Promise<void> {
+  let sprintName: string | undefined;
+  if (sprintId) {
+    const { data: sprint } = await supabase
+      .from('sprints')
+      .select('name')
+      .eq('id', sprintId)
+      .maybeSingle();
+    sprintName = sprint?.name ?? undefined;
+  }
   await supabase
     .from('project_calendar_events')
     .upsert(
@@ -607,7 +629,9 @@ async function upsertTaskCompletionCalendarEvent(
         start_at: completedAt,
         end_at: completedAt,
         type: 'task_completed',
-        description: `Conclusao real da atividade: ${title}`,
+        description: sprintName
+          ? `Conclusao real da atividade: ${title}\nSprint: "${sprintName}"`
+          : `Conclusao real da atividade: ${title}`,
         participant_ids: [],
       },
       { onConflict: 'id' },
@@ -799,15 +823,6 @@ export async function updateSprintTask(taskId: number, updates: {
     });
   }
 
-  if (updates.isCompleted && updates.clientId) {
-    await upsertTaskCompletionCalendarEvent(
-      updates.clientId,
-      taskId,
-      updates.title ?? existing.data.title,
-      new Date().toISOString(),
-    );
-  }
-
   const { data: sprintData, error: sprintError } = await supabase
     .from('sprints')
     .select('client_id, name')
@@ -815,6 +830,16 @@ export async function updateSprintTask(taskId: number, updates: {
     .single();
 
   if (sprintError) throw sprintError;
+
+  if (updates.isCompleted && updates.clientId) {
+    await upsertTaskCompletionCalendarEvent(
+      updates.clientId,
+      taskId,
+      updates.title ?? existing.data.title,
+      new Date().toISOString(),
+      data.sprint_id,
+    );
+  }
 
   await notifyClientUsers(sprintData.client_id, {
     type: 'sprint_update',
@@ -940,11 +965,23 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
   }
 
   if (updates.dueDate && updates.clientId && updates.title) {
-    upsertBacklogCalendarEvent(updates.clientId, backlogId, updates.title, updates.dueDate).catch(console.error);
+    upsertBacklogCalendarEvent(
+      updates.clientId,
+      backlogId,
+      updates.title,
+      updates.dueDate,
+      data.sprint_id ?? null,
+    ).catch(console.error);
   }
 
   if (updates.status === 'done' && updates.clientId && (updates.title || data?.title)) {
-    upsertTaskCompletionCalendarEvent(updates.clientId, existingTask.data?.id || backlogId, updates.title || data.title, new Date().toISOString()).catch(console.error);
+    upsertTaskCompletionCalendarEvent(
+      updates.clientId,
+      existingTask.data?.id || backlogId,
+      updates.title || data.title,
+      new Date().toISOString(),
+      data.sprint_id ?? null,
+    ).catch(console.error);
   }
 
   await notifyClientUsers(data.client_id, {
@@ -999,7 +1036,13 @@ export async function createSprintBacklogItem(itemData: {
 
   if (error) throw error;
   if (itemData.dueDate && data) {
-    upsertBacklogCalendarEvent(itemData.clientId, data.id, itemData.title, itemData.dueDate).catch(console.error);
+    upsertBacklogCalendarEvent(
+      itemData.clientId,
+      data.id,
+      itemData.title,
+      itemData.dueDate,
+      itemData.sprintId ?? null,
+    ).catch(console.error);
   }
 
   await notifyClientUsers(itemData.clientId, {
