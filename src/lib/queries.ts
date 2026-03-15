@@ -814,26 +814,42 @@ export async function updateSprintTask(taskId: number, updates: {
   if (updates.dueDate !== undefined) payload.due_date = updates.dueDate;
   if (updates.endDate !== undefined) payload.end_date = updates.endDate;
 
-  let { data, error } = await supabase
+  let { error } = await supabase
     .from('sprint_tasks')
     .update(payload)
-    .eq('id', taskId)
-    .select('*')
-    .single();
+    .eq('id', taskId);
 
   if (error && Object.prototype.hasOwnProperty.call(payload, 'completed_at') && isMissingColumnError(error, 'completed_at')) {
     const { completed_at, ...fallbackPayload } = payload;
     const retry = await supabase
       .from('sprint_tasks')
       .update(fallbackPayload)
-      .eq('id', taskId)
-      .select('*')
-      .single();
-    data = retry.data;
+      .eq('id', taskId);
     error = retry.error;
   }
 
   if (error) throw error;
+
+  const refreshedTask = await supabase
+    .from('sprint_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .maybeSingle();
+
+  if (refreshedTask.error) throw refreshedTask.error;
+
+  const data = refreshedTask.data ?? {
+    ...existing.data,
+    is_completed: updates.isCompleted ?? false,
+    completed_at: updates.isCompleted ? new Date().toISOString() : null,
+    title: updates.title ?? existing.data.title,
+    description: updates.description ?? existing.data.description,
+    context_notes: updates.contextNotes ?? existing.data.context_notes,
+    subtasks: updates.subtasks ?? existing.data.subtasks,
+    attachments: updates.attachments ?? existing.data.attachments,
+    due_date: updates.dueDate ?? existing.data.due_date,
+    end_date: updates.endDate ?? null,
+  };
 
   if (data?.backlog_item_id) {
     await updateSprintBacklogItem(data.backlog_item_id, {
@@ -849,9 +865,10 @@ export async function updateSprintTask(taskId: number, updates: {
     .from('sprints')
     .select('client_id, name')
     .eq('id', data.sprint_id)
-    .single();
+    .maybeSingle();
 
   if (sprintError) throw sprintError;
+  if (!sprintData) throw new Error('Sprint não encontrada para a atividade atualizada');
 
   if (updates.isCompleted && updates.clientId) {
     await upsertTaskCompletionCalendarEvent(
@@ -956,26 +973,37 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
 
   if (existingTask.error) throw existingTask.error;
 
-  let { data, error } = await supabase
+  let { error } = await supabase
     .from('sprint_backlog')
     .update(payload)
-    .eq('id', backlogId)
-    .select('*')
-    .single();
+    .eq('id', backlogId);
 
   if (error && Object.prototype.hasOwnProperty.call(payload, 'completed_at') && isMissingColumnError(error, 'completed_at')) {
     const { completed_at, ...fallbackPayload } = payload;
     const retry = await supabase
       .from('sprint_backlog')
       .update(fallbackPayload)
-      .eq('id', backlogId)
-      .select('*')
-      .single();
-    data = retry.data;
+      .eq('id', backlogId);
     error = retry.error;
   }
 
   if (error) throw error;
+
+  const refreshedBacklog = await supabase
+    .from('sprint_backlog')
+    .select('*')
+    .eq('id', backlogId)
+    .maybeSingle();
+
+  if (refreshedBacklog.error) throw refreshedBacklog.error;
+
+  const data = refreshedBacklog.data ?? {
+    id: backlogId,
+    client_id: updates.clientId ?? null,
+    sprint_id: updates.sprintId ?? existingTask.data?.sprint_id ?? null,
+    title: updates.title ?? null,
+    status: updates.status ?? null,
+  };
 
   if (existingTask.data) {
     const taskPayload: Record<string, unknown> = {};
@@ -1028,20 +1056,22 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
     ).catch(console.error);
   }
 
-  await notifyClientUsers(data.client_id, {
-    type: 'activity_update',
-    category: 'activities',
-    eventType: updates.status === 'done' ? 'backlog.item.completed' : 'backlog.item.updated',
-    title: updates.status === 'done' ? 'Item do backlog concluido' : 'Item do backlog atualizado',
-    message: data.title,
-    linkTo: '/kanban',
-    sourceEntityType: 'sprint_backlog',
-    sourceEntityId: data.id,
-    metadata: {
-      sprint_id: data.sprint_id,
-      status: data.status,
-    },
-  }).catch(console.error);
+  if (typeof data.client_id === 'number') {
+    await notifyClientUsers(data.client_id, {
+      type: 'activity_update',
+      category: 'activities',
+      eventType: updates.status === 'done' ? 'backlog.item.completed' : 'backlog.item.updated',
+      title: updates.status === 'done' ? 'Item do backlog concluido' : 'Item do backlog atualizado',
+      message: typeof data.title === 'string' ? data.title : updates.title,
+      linkTo: '/kanban',
+      sourceEntityType: 'sprint_backlog',
+      sourceEntityId: backlogId,
+      metadata: {
+        sprint_id: data.sprint_id,
+        status: data.status,
+      },
+    }).catch(console.error);
+  }
 
   return data;
 }
