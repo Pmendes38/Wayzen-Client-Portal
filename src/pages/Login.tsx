@@ -51,25 +51,25 @@ export default function Login() {
 
           <div className="max-w-xl">
             <h1 className="text-4xl xl:text-5xl font-extrabold leading-tight">
-              Visibilidade completa da operacao comercial do cliente.
+              Bem-vindo(a)! Aqui voce acompanha seu projeto com clareza e tranquilidade.
             </h1>
             <p className="mt-4 text-wayzen-100 text-base xl:text-lg">
-              Um portal proprietario para acompanhar sprint, tickets, documentos e relatorios com clareza executiva.
+              Reunimos prazos, conversas, documentos e resultados em um so lugar para facilitar seu dia a dia.
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 max-w-xl text-center">
             <div className="rounded-xl border border-white/20 bg-white/10 p-3">
-              <p className="text-xl font-extrabold">+30%</p>
-              <p className="text-xs text-wayzen-100">Produtividade</p>
+              <p className="text-xl font-extrabold">Suporte</p>
+              <p className="text-xs text-wayzen-100">Atendimento proximo</p>
             </div>
             <div className="rounded-xl border border-white/20 bg-white/10 p-3">
-              <p className="text-xl font-extrabold">SLA</p>
-              <p className="text-xs text-wayzen-100">Tickets claros</p>
+              <p className="text-xl font-extrabold">Clareza</p>
+              <p className="text-xs text-wayzen-100">Status em tempo real</p>
             </div>
             <div className="rounded-xl border border-white/20 bg-white/10 p-3">
-              <p className="text-xl font-extrabold">1 hub</p>
-              <p className="text-xs text-wayzen-100">Tudo centralizado</p>
+              <p className="text-xl font-extrabold">1 painel</p>
+              <p className="text-xs text-wayzen-100">Tudo organizado para voce</p>
             </div>
           </div>
         </div>
@@ -86,9 +86,9 @@ export default function Login() {
 
           <div className="card p-6 md:p-8 bg-white dark:bg-slate-900 dark:border-slate-700">
             <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">Entrar na sua conta</h2>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">Acesse seu painel para acompanhar entregas e resultados.</p>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">Acesse seu painel para acompanhar cada etapa com transparencia.</p>
             <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
-              O sistema identifica automaticamente sua role (Cliente, Consultor ou Admin) e envia para a tela correta.
+              Ao entrar, voce e direcionado automaticamente para o seu ambiente.
             </p>
 
             {error && (
@@ -117,7 +117,7 @@ export default function Login() {
 
             <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-700">
               <p className="text-xs text-gray-500 dark:text-slate-400 text-center">
-                A autenticação é feita exclusivamente pelo Supabase Auth.
+                Seu acesso e protegido para manter suas informacoes seguras.
               </p>
             </div>
           </div>
