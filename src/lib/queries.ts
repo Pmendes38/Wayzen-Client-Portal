@@ -1,4 +1,58 @@
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+// ─── Users (Admin) ────────────────────────────────────────────────────
+export async function getUsers() {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, auth_user_id, email, name, role, client_id, is_active, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function createUser(userData: {
+  name: string;
+  email: string;
+  password: string;
+  role: 'admin' | 'consultant' | 'client';
+  clientId?: number | null;
+}) {
+  // Use an isolated client so the admin session on the main client is not replaced
+  const tempClient = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data: authData, error: authError } = await tempClient.auth.signUp({
+    email: userData.email,
+    password: userData.password,
+  });
+
+  if (authError) throw authError;
+
+  const authUserId = authData.user?.id;
+  if (!authUserId) throw new Error('Falha ao criar conta de autenticação');
+
+  const { data, error } = await supabase
+    .from('users')
+    .insert({
+      auth_user_id: authUserId,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role,
+      client_id: userData.clientId ?? null,
+      is_active: true,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
 
 // ─── Helper Functions ────────────────────────────────────────────────
 export async function getCurrentUser() {

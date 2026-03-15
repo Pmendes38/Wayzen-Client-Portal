@@ -12,13 +12,19 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const getPathByRole = (role: 'admin' | 'consultant' | 'client') => {
+    if (role === 'admin') return '/adm';
+    if (role === 'consultant') return '/consultor';
+    return '/cliente';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      navigate('/portal-select');
+      const loggedUser = await login(email, password);
+      navigate(getPathByRole(loggedUser.role));
     } catch (err: any) {
       setError(err.message || 'Erro ao fazer login');
     } finally {
@@ -79,6 +85,9 @@ export default function Login() {
           <div className="card p-6 md:p-8 bg-white dark:bg-slate-900 dark:border-slate-700">
             <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-1">Entrar na sua conta</h2>
             <p className="text-sm text-gray-500 dark:text-slate-400 mb-6">Acesse seu painel para acompanhar entregas e resultados.</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
+              O sistema identifica automaticamente sua role (Cliente, Consultor ou Admin) e envia para a tela correta.
+            </p>
 
             {error && (
               <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>

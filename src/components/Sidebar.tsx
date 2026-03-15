@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import {
   LayoutDashboard, Ticket, FileText, FolderOpen,
-  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, CalendarDays, KanbanSquare
+  BarChart3, Bell, LogOut, ChevronLeft, ChevronRight, CalendarDays, KanbanSquare, ShieldCheck, Users
 } from 'lucide-react';
 import { useState } from 'react';
 import ThemeToggle from './ThemeToggle';
@@ -21,7 +21,7 @@ export default function Sidebar() {
 
   const navItems = isInternal
     ? [
-        { to: '/', icon: LayoutDashboard, label: 'Dashboard Operacional' },
+        { to: user?.role === 'admin' ? '/adm' : '/consultor', icon: LayoutDashboard, label: user?.role === 'admin' ? 'Portal Wayzen (ADM)' : 'Portal Consultor' },
         { to: '/kanban', icon: KanbanSquare, label: 'Kanban' },
         { to: '/sprints', icon: BarChart3, label: 'Sprints' },
         { to: '/meetings', icon: CalendarDays, label: 'Agenda e Chamadas' },
@@ -29,11 +29,16 @@ export default function Sidebar() {
         { to: '/documents', icon: FolderOpen, label: 'Documentos' },
         { to: '/reports', icon: FileText, label: 'Relatórios' },
         { to: '/notifications', icon: Bell, label: 'Notificações' },
+        ...(user?.role === 'admin'
+          ? [
+              { to: '/adm', icon: ShieldCheck, label: 'Clientes' },
+              { to: '/usuarios', icon: Users, label: 'Usuarios e Acessos' },
+            ]
+          : []),
       ]
     : [
-        { to: '/', icon: LayoutDashboard, label: 'Meu Projeto' },
-        { to: '/kanban', icon: KanbanSquare, label: 'Kanban' },
-        { to: '/sprints', icon: BarChart3, label: 'Cronograma' },
+        { to: '/cliente', icon: LayoutDashboard, label: 'Portal do Cliente' },
+        { to: '/sprints', icon: BarChart3, label: 'Cronograma de Sprints' },
         { to: '/meetings', icon: CalendarDays, label: 'Agenda' },
         { to: '/tickets', icon: Ticket, label: 'Chat do Projeto' },
         { to: '/documents', icon: FolderOpen, label: 'Documentos' },

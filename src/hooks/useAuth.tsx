@@ -106,7 +106,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -257,13 +257,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Garante o fluxo login -> escolha de portal para perfis internos.
     localStorage.removeItem('wayzen.activeClientId');
 
-    setUser({
+    const resolvedUser = {
       id: profile.id,
       email: profile.email,
       name: profile.name,
       role: profile.role,
       clientId: profile.client_id,
-    });
+    };
+
+    setUser(resolvedUser);
+    return resolvedUser;
   };
 
   const logout = async () => {
