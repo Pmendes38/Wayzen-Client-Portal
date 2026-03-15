@@ -13,6 +13,18 @@ function isMissingColumnError(error: unknown, columnName: string) {
   return candidate.code === '42703' || detailText.includes(`column \"${columnName.toLowerCase()}\"`) || detailText.includes(columnName.toLowerCase());
 }
 
+function isConstraintError(error: unknown, constraintName: string) {
+  if (!error || typeof error !== 'object') return false;
+
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string };
+  const detailText = [candidate.message, candidate.details, candidate.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return candidate.code === '23514' && detailText.includes(constraintName.toLowerCase());
+}
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const ADMIN_CREATE_USER_STORAGE_KEY = 'wayzen.admin.create-user.auth';
@@ -62,9 +74,30 @@ function dedupeNumberList(values: Array<number | null | undefined>): number[] {
 async function insertNotificationEvents(rows: NotificationInsert[]): Promise<void> {
   if (!rows.length) return;
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('notifications')
     .insert(rows);
+
+  if (!error) return;
+
+  if (isConstraintError(error, 'notifications_type_check')) {
+    // Legacy databases may still enforce old values for notifications.type.
+    const fallbackRows = rows.map((row) => ({
+      user_id: row.user_id,
+      type: 'system',
+      title: row.title,
+      message: row.message,
+      link_to: row.link_to,
+      source_entity_type: row.source_entity_type,
+      source_entity_id: row.source_entity_id,
+    }));
+
+    const retry = await supabase
+      .from('notifications')
+      .insert(fallbackRows);
+
+    error = retry.error;
+  }
 
   if (error) throw error;
 }
