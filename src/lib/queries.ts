@@ -1,6 +1,18 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
+function isMissingColumnError(error: unknown, columnName: string) {
+  if (!error || typeof error !== 'object') return false;
+
+  const candidate = error as { code?: string; message?: string; details?: string; hint?: string };
+  const detailText = [candidate.message, candidate.details, candidate.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return candidate.code === '42703' || detailText.includes(`column \"${columnName.toLowerCase()}\"`) || detailText.includes(columnName.toLowerCase());
+}
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const ADMIN_CREATE_USER_STORAGE_KEY = 'wayzen.admin.create-user.auth';
@@ -39,10 +51,8 @@ type NotificationInsert = {
   link_to?: string;
   source_entity_type?: string;
   source_entity_id?: number;
-  occurred_at: string;
-  metadata: Record<string, unknown>;
-  is_read: boolean;
-  read_at: string | null;
+  metadata?: Record<string, unknown>;
+  occurred_at?: string;
 };
 
 function dedupeNumberList(values: Array<number | null | undefined>): number[] {
@@ -785,7 +795,7 @@ export async function updateSprintTask(taskId: number, updates: {
 }) {
   const existing = await supabase
     .from('sprint_tasks')
-    .select('id, sprint_id, backlog_item_id, title, description, context_notes, subtasks, attachments, due_date, completed_at')
+    .select('id, sprint_id, backlog_item_id, title, description, context_notes, subtasks, attachments, due_date')
     .eq('id', taskId)
     .single();
 
@@ -804,12 +814,24 @@ export async function updateSprintTask(taskId: number, updates: {
   if (updates.dueDate !== undefined) payload.due_date = updates.dueDate;
   if (updates.endDate !== undefined) payload.end_date = updates.endDate;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('sprint_tasks')
     .update(payload)
     .eq('id', taskId)
     .select('*')
     .single();
+
+  if (error && Object.prototype.hasOwnProperty.call(payload, 'completed_at') && isMissingColumnError(error, 'completed_at')) {
+    const { completed_at, ...fallbackPayload } = payload;
+    const retry = await supabase
+      .from('sprint_tasks')
+      .update(fallbackPayload)
+      .eq('id', taskId)
+      .select('*')
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) throw error;
 
@@ -934,12 +956,24 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
 
   if (existingTask.error) throw existingTask.error;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('sprint_backlog')
     .update(payload)
     .eq('id', backlogId)
     .select('*')
     .single();
+
+  if (error && Object.prototype.hasOwnProperty.call(payload, 'completed_at') && isMissingColumnError(error, 'completed_at')) {
+    const { completed_at, ...fallbackPayload } = payload;
+    const retry = await supabase
+      .from('sprint_backlog')
+      .update(fallbackPayload)
+      .eq('id', backlogId)
+      .select('*')
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) throw error;
 
@@ -956,10 +990,20 @@ export async function updateSprintBacklogItem(backlogId: number, updates: {
       taskPayload.completed_at = updates.status === 'done' ? new Date().toISOString() : null;
     }
     if (Object.keys(taskPayload).length) {
-      const { error: syncError } = await supabase
+      let { error: syncError } = await supabase
         .from('sprint_tasks')
         .update(taskPayload)
         .eq('id', existingTask.data.id);
+
+      if (syncError && Object.prototype.hasOwnProperty.call(taskPayload, 'completed_at') && isMissingColumnError(syncError, 'completed_at')) {
+        const { completed_at, ...fallbackTaskPayload } = taskPayload;
+        const retry = await supabase
+          .from('sprint_tasks')
+          .update(fallbackTaskPayload)
+          .eq('id', existingTask.data.id);
+        syncError = retry.error;
+      }
+
       if (syncError) throw syncError;
     }
   }
